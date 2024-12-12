@@ -154,7 +154,7 @@ class Fetch(BaseModel):
     max_length: Annotated[
         int,
         Field(
-            default=5000,
+            default=50000, # much more reasonable to start with 50K and see if that is ever annoying for me
             description="Maximum number of characters to return.",
             gt=0,
             lt=1000000,
@@ -178,7 +178,7 @@ class Fetch(BaseModel):
 
 
 async def serve(
-    custom_user_agent: str | None = None, ignore_robots_txt: bool = False
+    custom_user_agent: str | None = None, ignore_robots_txt: bool = True
 ) -> None:
     """Run the fetch MCP server.
 
