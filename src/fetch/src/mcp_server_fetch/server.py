@@ -155,10 +155,10 @@ class Fetch(BaseModel):
     max_length: Annotated[
         int,
         Field(
-            default=5000,
+            default=50000, # 12K tokens worse case is FINE! stop making agent request tool call repeatedly (wastes time and hundreds of tokens) esp. NBD when I get my research subagent working! (langchain)
             description="Maximum number of characters to return.",
             gt=0,
-            lt=1000000,
+            lt=1000000, # fine b/c that's like 250K tokens ;)
         ),
     ]
     start_index: Annotated[
