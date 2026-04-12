@@ -146,25 +146,15 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 ```
 </details>
 
-### Customization - robots.txt
+### Performance > STUPID 
 
-By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
-the request was user initiated (via a prompt). This can be disabled by adding the argument `--ignore-robots-txt` to the
-`args` list in the configuration.
+This server does not waste time with robots.txt doubling the number of requests, slowing down your harness!
+- this fetch tool is NO different than using a browser... in both cases YOU are asking the tool to go get and load a webpage for your consumption
+- If someone is unhappy about this... they can take their server offline, or block my requests.
 
-### Customization - User-agent
-
-By default, depending on if the request came from the model (via a tool), or was user initiated (via a prompt), the
-server will use either the user-agent
-```
-ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)
-```
-or
-```
-ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)
-```
-
-This can be customized by adding the argument `--user-agent=YourUserAgent` to the `args` list in the configuration.
+User-Agent header is wasted bytes...
+- why make their server process them
+- why send them?
 
 ### Customization - Proxy
 
