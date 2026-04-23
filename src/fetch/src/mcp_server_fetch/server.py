@@ -127,22 +127,17 @@ async def serve(
                     {'description': 'Parameters for fetching a URL.',
                      'properties': {'url': {'format': 'uri',
                        'minLength': 1,
-                       'title': 'Url',
                        'type': 'string'},
                       'max_chars': {'default': 50000,
                        'description': 'Maximum number of characters to return.',
-                       'title': 'Max Chars',
                        'type': 'integer'},
                       'start_index': {'default': 0,
                        'description': 'Start at this character offset, useful if a previous fetch was truncated and more context is required.',
-                       'title': 'Start Index',
                        'type': 'integer'},
                       'raw': {'default': False,
                        'description': 'HTML content without simplification.',
-                       'title': 'Raw',
                        'type': 'boolean'}},
                      'required': ['url'],
-                     'title': 'Fetch',
                      'type': 'object'}
             )
         ]
