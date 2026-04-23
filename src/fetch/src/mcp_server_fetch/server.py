@@ -124,8 +124,7 @@ async def serve(
                 name="fetch",
                 description="Fetch URL and extract its contents as markdown.",
                 inputSchema=
-                    {'description': 'Parameters for fetching a URL.',
-                     'properties': {'url': {'format': 'uri',
+                    {'properties': {'url': {'format': 'uri',
                        'minLength': 1,
                        'type': 'string'},
                       'max_chars': {'default': 50000,
