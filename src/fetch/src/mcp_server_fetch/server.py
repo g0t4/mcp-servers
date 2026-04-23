@@ -122,9 +122,7 @@ async def serve(
         return [
             Tool(
                 name="fetch",
-                description="""Fetches a URL from the internet and optionally extracts its contents as markdown.
-
-Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
+                description="Fetch URL and extract its contents as markdown.",
                 inputSchema=Fetch.model_json_schema(),
             )
         ]
