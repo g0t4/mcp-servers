@@ -17,12 +17,16 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.27",
+    "ipykernel>=7.2.0",
     "markdownify>=0.13.1",
     "mcp>=1.1.3",
     "protego>=0.3.1",
     "pydantic>=2.0.0",
+    "pytest>=9.0.2",
     "readabilipy>=0.2.0",
     "requests>=2.32.3",
+    "rich>=15.0.0",
+    "yapf>=0.43.0",
 ]
 
 [project.scripts]
