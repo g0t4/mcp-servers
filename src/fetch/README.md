@@ -13,7 +13,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.
     - `url` (string, required): URL to fetch
-    - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
+    - `max_chars` (integer, optional): Maximum number of characters to return (default: 5000)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
 

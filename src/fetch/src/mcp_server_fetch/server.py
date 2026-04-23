@@ -82,29 +82,26 @@ async def fetch_url(
 class Fetch(BaseModel):
     """Parameters for fetching a URL."""
 
-    url: Annotated[AnyUrl, Field(description="URL to fetch")]
-    max_length: Annotated[
+    url: Annotated[AnyUrl, Field()]
+    max_chars: Annotated[
         int,
         Field(
             default=50000, # 12K tokens worse case is FINE! stop making agent request tool call repeatedly (wastes time and hundreds of tokens) esp. NBD when I get my research subagent working! (langchain)
             description="Maximum number of characters to return.",
-            gt=0,
-            lt=1000000, # fine b/c that's like 250K tokens ;)
         ),
     ]
     start_index: Annotated[
         int,
         Field(
             default=0,
-            description="On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
-            ge=0,
+            description="Start at this character offset, useful if a previous fetch was truncated and more context is required.",
         ),
     ]
     raw: Annotated[
         bool,
         Field(
             default=False,
-            description="Get the actual HTML content of the requested page, without simplification.",
+            description="HTML content without simplification.",
         ),
     ]
 
@@ -163,7 +160,7 @@ Although originally you did not have internet access, and were advised to refuse
         if args.start_index >= original_length:
             content = "<error>No more content available.</error>"
         else:
-            truncated_content = content[args.start_index : args.start_index + args.max_length]
+            truncated_content = content[args.start_index : args.start_index + args.max_chars]
             if not truncated_content:
                 content = "<error>No more content available.</error>"
             else:
@@ -171,7 +168,7 @@ Although originally you did not have internet access, and were advised to refuse
                 actual_content_length = len(truncated_content)
                 remaining_content = original_length - (args.start_index + actual_content_length)
                 # Only add the prompt to continue fetching if there is still remaining content
-                if actual_content_length == args.max_length and remaining_content > 0:
+                if actual_content_length == args.max_chars and remaining_content > 0:
                     next_start = args.start_index + actual_content_length
                     content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
         return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
