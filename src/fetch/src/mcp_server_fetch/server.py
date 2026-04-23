@@ -125,7 +125,6 @@ async def serve(
                 description="Fetch URL and extract its contents as markdown.",
                 inputSchema=
                     {'properties': {'url': {'format': 'uri',
-                       'minLength': 1,
                        'type': 'string'},
                       'max_chars': {'default': 50000,
                        'description': 'Maximum number of characters to return.',
