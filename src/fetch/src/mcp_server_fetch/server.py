@@ -121,7 +121,7 @@ async def serve(
     async def list_tools() -> list[Tool]:
         return [
             Tool(name="fetch",
-                 description="Fetch a URL and extract its contents as markdown.",
+                 description="Fetch a URL and extract HTML contents as markdown",
                  inputSchema={
                      'properties': {
                          'url': {
@@ -129,17 +129,17 @@ async def serve(
                          },
                          'max_chars': {
                              'default': 50000,
-                             'description': 'Maximum number of characters to return.',
+                             'description': 'Maximum number of characters to return',
                              'type': 'integer'
                          },
                          'start_index': {
                              'default': 0,
-                             'description': 'Start at this character offset, useful if a previous fetch was truncated and more context is required.',
+                             'description': 'Start at this character offset, useful if a previous fetch was truncated and more context is required',
                              'type': 'integer'
                          },
                          'raw': {
                              'default': False,
-                             'description': 'HTML content without simplification.',
+                             'description': 'Do not convert HTML to markdown',
                              'type': 'boolean'
                          }
                      },
