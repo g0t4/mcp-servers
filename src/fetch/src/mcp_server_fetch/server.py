@@ -120,23 +120,32 @@ async def serve(
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         return [
-            Tool(
-                name="fetch",
-                description="Fetch URL and extract its contents as markdown.",
-                inputSchema=
-                    {'properties': {'url': {'type': 'string'},
-                      'max_chars': {'default': 50000,
-                       'description': 'Maximum number of characters to return.',
-                       'type': 'integer'},
-                      'start_index': {'default': 0,
-                       'description': 'Start at this character offset, useful if a previous fetch was truncated and more context is required.',
-                       'type': 'integer'},
-                      'raw': {'default': False,
-                       'description': 'HTML content without simplification.',
-                       'type': 'boolean'}},
+            Tool(name="fetch",
+                 description="Fetch a URL and extract its contents as markdown.",
+                 inputSchema={
+                     'properties': {
+                         'url': {
+                             'type': 'string'
+                         },
+                         'max_chars': {
+                             'default': 50000,
+                             'description': 'Maximum number of characters to return.',
+                             'type': 'integer'
+                         },
+                         'start_index': {
+                             'default': 0,
+                             'description': 'Start at this character offset, useful if a previous fetch was truncated and more context is required.',
+                             'type': 'integer'
+                         },
+                         'raw': {
+                             'default': False,
+                             'description': 'HTML content without simplification.',
+                             'type': 'boolean'
+                         }
+                     },
                      'required': ['url'],
-                     'type': 'object'}
-            )
+                     'type': 'object'
+                 })
         ]
 
     @server.list_prompts()
