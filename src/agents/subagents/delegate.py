@@ -84,15 +84,14 @@ async def delegate_tool(description: str, agent_type: str | None):
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
         config: RunnableConfig = {"configurable": {"thread_id": None}}
-        messages = [HumanMessage(description 
-            + """\n\n## APPROACH
+        messages = [
+            HumanMessage(description + """\n\n## APPROACH
     You are acting in an official sub-agent capactity.
     The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
     Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
-    """
-            # TODO setup tool calling loop until response is achieved or model actually gives up.
-
-                                 )],
+    """)
+            # TODO setup tool calling loop until response is achieved or model actually gives up... I had trouble with subagents initially acting as subagents in light of adversity or the need to further explore after first tool call... is that still happening?
+        ],
         # PRN accept recursion_limit arg?
         # await stream_messages(agent, messages, config=config) # TODO use a log file and stream to log file
         # TODO also capture the final output from LangGraph chain to return to user
@@ -110,6 +109,7 @@ async def delegate_tool(description: str, agent_type: str | None):
     try:
         return await _inner_delegate_tool(description, agent_type)
     except asyncio.CancelledError:
+        # TODO cancel the request... need to implement astream_events most likely and cancel on start of next tool call?
         console.print("CancelledError caught in delegate_tool", e)
         raise
 
