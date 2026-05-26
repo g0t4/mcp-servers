@@ -1,3 +1,5 @@
+from asyncio import CancelledError
+import asyncio
 import os
 import rich
 from rich.console import Console
@@ -75,6 +77,8 @@ async def setup_agent():
     )
 
 async def delegate_tool(description: str, agent_type: str | None):
+
+    async def _inner_delegate_tool(desc: str, a_type: str | None) -> list[TextContent]:
         console.print("START")
         # print(f"launching subagent {agent_type} with {description}")
         # quick hack to get messages by providing thread_id to in memory store
@@ -102,6 +106,12 @@ async def delegate_tool(description: str, agent_type: str | None):
         #  don't just assume it's an AIMessage
         console.print("output", output)
         return [TextContent(type="text", text=last_message.content)]
+
+    try:
+        return await _inner_delegate_tool(description, agent_type)
+    except asyncio.CancelledError:
+        console.print("CancelledError caught in delegate_tool", e)
+        raise
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
 #  AiITL middleware ;) SITL (supervisor in the loop) middleware
