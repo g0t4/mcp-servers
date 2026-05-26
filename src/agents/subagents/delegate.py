@@ -22,9 +22,13 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 DELEGATE_TOOL = "delegate"
 
+DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-finder"
+# TODO add descriptions of the capabilities (briefly) or just let the name indicate that?
+# TODO any desire to restrict tools for subagents so they can't be used for other purposes? for now I will give out the same tools until it causes issues.
+
 DELEGATE_DEFINITION = Tool(
     name=DELEGATE_TOOL,
-    description="Delegate to a subagent to perform research and summarize findings.",
+    description="Delegate to a subagent to perform relevent tasks and summarize findings.",
     inputSchema={
         'properties': {
             'description': {
@@ -32,7 +36,7 @@ DELEGATE_DEFINITION = Tool(
                 'type': 'string'
             },
             'agent_type': {
-                'description': 'which subagent profile to use, options: general, web-researcher, command-runner',
+                'description': 'which subagent profile to use, options: ' + DELEGATE_TYPES,
                 'type': 'string',
             }
             # TODO other options? limit # turns (recursion_limit?)
