@@ -1,3 +1,4 @@
+import asyncio
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -25,24 +26,42 @@ async def serve() -> None:
         # async def list_prompts() -> list[Prompt]:
         #     return [Prompt( arguments=[PromptArgument(description="", agent_type="", required=True)],)]
 
+    async def count():
+        try:
+            # for testing cancellation timing and progress notifications
+            for i in range(100):
+                await asyncio.sleep(0.2)
+
+                ctx = server.request_context
+                if ctx.meta and ctx.meta.progressToken:
+                    await ctx.session.send_progress_notification(
+                        progress_token=ctx.meta.progressToken,
+                        progress=(i + 1),
+                        total=100,
+                    )
+            return [TextContent(type="text", text="DONE")]
+        except asyncio.CancelledError as c:
+            # FYI nothing to do here and cannot send a progress notification... server will send the confirmation message that cancel is rx'd
+            # just let counting stop
+            # TODO add logging for this? trace/info level log that cancel called
+            raise  # stop tool
+
     @server.call_tool()
     async def call_tool(requested_tool, arguments: dict) -> list[TextContent]:
-        token = server.request_context.meta.progressToken
-
-        meta = server.request_context.meta
-        token = meta.progressToken if meta else ""
-        if token:
-            # TODO add progress notification on each tool call... just use message to convey where we're at is fine... have a smaller LLM summarize the task and send that description back
-            await server.request_context.session.send_progress_notification(progress_token=token, progress=50, total=100, message="Half way! ...")
-
-        if requested_tool != DELEGATE_TOOL:
-            raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
-
         try:
+            if requested_tool == "count":
+                # PRN remove unregistered count tool, purely for testing cancel and progress notifications
+                return await count()
+            elif requested_tool != DELEGATE_TOOL:
+                raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
+
             description = arguments.get("description")
             agent_type = arguments.get("agent_type", "general")
             return await delegate_tool(description, agent_type)
 
+        except asyncio.CancelledError:
+            # TODO log unhandled cancellation? so I know that I need to push it inside the inner tool function?
+            raise
         # FYI put unhandled exceptions here (outside of tool logic)
         except ValueError as e:
             console.print("ValueErorr", str(e))
