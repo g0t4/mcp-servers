@@ -75,33 +75,33 @@ async def setup_agent():
     )
 
 async def delegate_tool(description: str, agent_type: str | None):
-    console.print("START")
-    # print(f"launching subagent {agent_type} with {description}")
-    # quick hack to get messages by providing thread_id to in memory store
-    #   just for duration of a single request
-    config: RunnableConfig = {"configurable": {"thread_id": None}}
-    messages = [HumanMessage(description 
-        + """\n\n## APPROACH
-You are acting in an official sub-agent capactity.
-The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
-Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
-"""
-        # TODO setup tool calling loop until response is achieved or model actually gives up.
+        console.print("START")
+        # print(f"launching subagent {agent_type} with {description}")
+        # quick hack to get messages by providing thread_id to in memory store
+        #   just for duration of a single request
+        config: RunnableConfig = {"configurable": {"thread_id": None}}
+        messages = [HumanMessage(description 
+            + """\n\n## APPROACH
+    You are acting in an official sub-agent capactity.
+    The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
+    Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
+    """
+            # TODO setup tool calling loop until response is achieved or model actually gives up.
 
-                             )],
-    # PRN accept recursion_limit arg?
-    # await stream_messages(agent, messages, config=config) # TODO use a log file and stream to log file
-    # TODO also capture the final output from LangGraph chain to return to user
-    output = await agent.ainvoke({"messages": {"role": "user", "content": description}}, config=config)
-    # thread = agent.get_state(config).values["messages"]
-    # last_message = thread[-1]
-    console.print("DONE")
-    out_messages = output["messages"]
-    last_message = out_messages[-1]
-    # TODO better handling of output => response
-    #  don't just assume it's an AIMessage
-    console.print("output", output)
-    return [TextContent(type="text", text=last_message.content)]
+                                 )],
+        # PRN accept recursion_limit arg?
+        # await stream_messages(agent, messages, config=config) # TODO use a log file and stream to log file
+        # TODO also capture the final output from LangGraph chain to return to user
+        output = await agent.ainvoke({"messages": {"role": "user", "content": description}}, config=config)
+        # thread = agent.get_state(config).values["messages"]
+        # last_message = thread[-1]
+        console.print("DONE")
+        out_messages = output["messages"]
+        last_message = out_messages[-1]
+        # TODO better handling of output => response
+        #  don't just assume it's an AIMessage
+        console.print("output", output)
+        return [TextContent(type="text", text=last_message.content)]
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
 #  AiITL middleware ;) SITL (supervisor in the loop) middleware
