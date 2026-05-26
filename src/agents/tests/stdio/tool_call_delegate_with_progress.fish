@@ -5,14 +5,14 @@ set request_init '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"proto
 # initialized notification DOES NOT HAVE ID
 set notify_initialized '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
-set request_call_delegate '{ "jsonrpc": "2.0", "id": 2, "method":"tools/call","params":{"name":"delegate","arguments":{"description": "what time is it?"}}}'
+set request_call_delegate '{ "jsonrpc": "2.0", "id": 2, "method":"tools/call","params":{"name":"delegate", "_meta": { "progressToken": "req-42-progress" } , "arguments":{"description": "what time is it?"}}}'
 
 begin
     echo $request_init
     sleep 1
     echo $notify_initialized
     echo $request_call_delegate
-    sleep 1
+    sleep 2
 end | uv run \
     --directory ~/repos/github/g0t4/mcp-servers/src/agents \
     -m subagents \

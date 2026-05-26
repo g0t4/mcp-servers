@@ -27,6 +27,14 @@ async def serve() -> None:
 
     @server.call_tool()
     async def call_tool(requested_tool, arguments: dict) -> list[TextContent]:
+        token = server.request_context.meta.progressToken
+
+        meta = server.request_context.meta
+        token = meta.progressToken if meta else ""
+        if token:
+            # TODO add progress notification on each tool call... just use message to convey where we're at is fine... have a smaller LLM summarize the task and send that description back
+            await server.request_context.session.send_progress_notification(progress_token=token, progress=50, total=100, message="Half way! ...")
+
         if requested_tool != DELEGATE_TOOL:
             raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
 
