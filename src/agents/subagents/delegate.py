@@ -22,14 +22,26 @@ from mcp.types import TextContent, Tool
 from deepagents.backends import LocalShellBackend
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-DELEGATE_TOOL = "delegate"
+DELEGATE_TOOL_NAME = "delegate"
+COUNT_TOOL_NAME = "count"
 
 DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-finder"
 # TODO add descriptions of the capabilities (briefly) or just let the name indicate that?
 # TODO any desire to restrict tools for subagents so they can't be used for other purposes? for now I will give out the same tools until it causes issues.
 
-DELEGATE_DEFINITION = Tool(
-    name=DELEGATE_TOOL,
+COUNT_TOOL = Tool(
+    name=COUNT_TOOL_NAME,
+    description="Count to, for testing progress and cancellation",
+    inputSchema={
+        'type': 'object',
+        'properties': {
+            'to': { 'type': 'integer', 'description': 'the integer to count to', },
+        },
+    }
+) 
+
+DELEGATE_TOOL = Tool(
+    name=DELEGATE_TOOL_NAME,
     description="Delegate to a subagent to perform relevent tasks and summarize findings.",
     inputSchema={
         'properties': {

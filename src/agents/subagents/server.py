@@ -12,7 +12,7 @@ from mcp.types import (
     INVALID_PARAMS,
     INTERNAL_ERROR,
 )
-from subagents.delegate import DELEGATE_DEFINITION, DELEGATE_TOOL, delegate_tool, setup_agent, console
+from subagents.delegate import *
 
 async def serve() -> None:
     server = Server("subagents")
@@ -20,16 +20,16 @@ async def serve() -> None:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return [DELEGATE_DEFINITION]
+        return [DELEGATE_TOOL, COUNT_TOOL]
 
         # @server.list_prompts()
         # async def list_prompts() -> list[Prompt]:
         #     return [Prompt( arguments=[PromptArgument(description="", agent_type="", required=True)],)]
 
-    async def count():
+    async def count(count_to: int):
         try:
             # for testing cancellation timing and progress notifications
-            for i in range(100):
+            for i in range(0, count_to):
                 await asyncio.sleep(0.2)
 
                 ctx = server.request_context
@@ -39,7 +39,10 @@ async def serve() -> None:
                         progress=(i + 1),
                         total=100,
                     )
-            return [TextContent(type="text", text="DONE")]
+                else:
+                    return [TextContent(type="text", text=f"Missing a progressToken, cannot count, please add one and try again")]
+            return [TextContent(type="text", text=f"DONE counting to {count_to}")]
+
         except asyncio.CancelledError as c:
             # FYI nothing to do here and cannot send a progress notification... server will send the confirmation message that cancel is rx'd
             # just let counting stop
@@ -49,10 +52,11 @@ async def serve() -> None:
     @server.call_tool()
     async def call_tool(requested_tool, arguments: dict) -> list[TextContent]:
         try:
-            if requested_tool == "count":
+            if requested_tool == COUNT_TOOL_NAME:
                 # PRN remove unregistered count tool, purely for testing cancel and progress notifications
-                return await count()
-            elif requested_tool != DELEGATE_TOOL:
+                to = int(arguments['to'])
+                return await count(to)
+            elif requested_tool != DELEGATE_TOOL_NAME:
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
 
             description = arguments.get("description")
