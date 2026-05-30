@@ -66,10 +66,12 @@ async def serve() -> None:
             # Build the on_tool_start callback that sends MCP progress notifications
             async def on_tool_start(tool_name: str, tool_args: dict, tool_start_count: int) -> None:
                 if progress_token is not None:
+                    tool_args_str = str(tool_args)
+                    message = f"Running tool: {tool_name} args={tool_args_str}"
                     await ctx.session.send_progress_notification(
                         progress_token=progress_token,
                         progress=tool_start_count,
-                        message=f"Running tool: {tool_name}",
+                        message=message,
                     )
 
             description = arguments.get("description")
