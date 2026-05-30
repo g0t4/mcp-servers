@@ -43,7 +43,8 @@ async def serve() -> None:
                     return [TextContent(type="text", text=f"Missing a progressToken, cannot count, please add one and try again")]
             return [TextContent(type="text", text=f"DONE counting to {count_to}")]
 
-        except asyncio.CancelledError as c:
+        except asyncio.CancelledError as error:
+            rich.inspect(error, console=console)
             # FYI nothing to do here and cannot send a progress notification... server will send the confirmation message that cancel is rx'd
             # just let counting stop
             # TODO add logging for this? trace/info level log that cancel called
@@ -67,12 +68,12 @@ async def serve() -> None:
             # TODO log unhandled cancellation? so I know that I need to push it inside the inner tool function?
             raise
         # FYI put unhandled exceptions here (outside of tool logic)
-        except ValueError as e:
-            console.print("ValueErorr", str(e))
-            raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
-        except Exception as e:
-            console.print(str(e))
-            raise McpError(ErrorData(code=INTERNAL_ERROR, message=str(e)))
+        except ValueError as error:
+            rich.inspect(error, console=console)
+            raise McpError(ErrorData(code=INVALID_PARAMS, message=str(error)))
+        except Exception as error:
+            rich.inspect(error, console=console)
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=str(error)))
 
     # * start the server
     options = server.create_initialization_options()
