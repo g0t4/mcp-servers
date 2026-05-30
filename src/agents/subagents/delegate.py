@@ -12,8 +12,7 @@ console = Console(file=file)
 # import markdownify
 # import readabilipy.simple_json
 
-from langchain_core.callbacks import BaseCallbackHandler, AsyncCallbackHandler
-from langchain_core.messages import HumanMessage
+from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
 from langchain_llama_server import ChatLlamaServer
@@ -138,16 +137,16 @@ async def delegate_tool(
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
         config: RunnableConfig = {"configurable": {"thread_id": None}}
-        messages = [
-            HumanMessage(description + """\n\n## APPROACH
+
+        # Use dict format (role/content pairs) that ChatLlamaServer expects
+        # rather than HumanMessage objects (which caused "Message as a sequence" error)
+        user_prompt = description + """\n\n## APPROACH
     You are acting in an official sub-agent capactity.
     The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
     Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
-    """)
-            # TODO setup tool calling loop until response is achieved or model actually gives up... I had trouble with subagents initially acting as subagents in light of adversity or the need to further explore after first tool call... is that still happening?
-        ],
-        # PRN accept recursion_limit arg?
-        # await stream_messages(agent, messages, config=config) # TODO use a log file and stream to log file
+    """
+
+        messages = [{"role": "user", "content": user_prompt}]
 
         # Attach the progress reporting handler as a callback
         callbacks = [ProgressReportingHandler(on_tool_start=tool_start_cb)]
