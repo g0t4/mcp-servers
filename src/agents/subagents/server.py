@@ -44,11 +44,10 @@ async def serve() -> None:
             return [TextContent(type="text", text=f"DONE counting to {count_to}")]
 
         except asyncio.CancelledError as error:
+            # TODO what do I want to log instead of rich.inspect every time?
             rich.inspect(error, console=console)
-            # FYI nothing to do here and cannot send a progress notification... server will send the confirmation message that cancel is rx'd
-            # just let counting stop
-            # TODO add logging for this? trace/info level log that cancel called
-            raise  # stop tool
+            # FYI cannot send a progress notification... instead, server sends cancel confirm and that's it for comms
+            raise
 
     @server.call_tool()
     async def call_tool(requested_tool, arguments: dict) -> list[TextContent]:
