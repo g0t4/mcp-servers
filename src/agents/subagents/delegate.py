@@ -44,6 +44,12 @@ COUNT_TOOL = Tool(
 
 DEFAULT_RECURSION_LIMIT = 50
 
+RECURSION_LIMIT_DESC = (
+    "LangChain's max messages for the subagent before stopping. Each subagent tool call "
+    "produces 2 messages (input + output). Leave unset unless the task needs more or "
+    "fewer than the default (50)."
+)
+
 DELEGATE_TOOL = Tool(
     name=DELEGATE_TOOL_NAME,
     description="Delegate to a subagent to perform relevent tasks and summarize findings.",
@@ -58,7 +64,7 @@ DELEGATE_TOOL = Tool(
                 'type': 'string',
             },
             'recursion_limit': {
-                'description': 'maximum number of tool call steps the subagent can take before stopping',
+                'description': RECURSION_LIMIT_DESC,
                 'type': 'integer',
             }
         },
