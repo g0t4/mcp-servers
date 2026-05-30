@@ -13,7 +13,6 @@ console = Console(file=file)
 # import markdownify
 # import readabilipy.simple_json
 
-from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
 from langchain_llama_server import ChatLlamaServer
@@ -92,28 +91,6 @@ async def setup_agent():
     )
 
 
-class ProgressReportingHandler(AsyncCallbackHandler):
-    """LangChain async callback handler that reports tool starts for MCP progress notifications."""
-
-    def __init__(self, on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None):
-        self.on_tool_start_cb = on_tool_start
-        self.tool_start_count = 0
-
-    async def on_tool_start(self, serialized: dict[str, Any], input_str: str, *, run_id: UUID, parent_run_id: UUID | None = None, tags: list[str] | None = None, metadata: dict[str, Any] | None = None, inputs: dict[str, Any] | None = None, **kwargs: Any) -> None:
-        tool_name = serialized.get("name", "unknown")
-        self.tool_start_count += 1
-
-        # Log tool start to agent.log (via rich console)
-        console.print(f"tool_start=[tool={tool_name}] args={inputs}")
-
-        # Invoke the progress callback if provided (passing the current count)
-        if self.on_tool_start_cb is not None:
-            try:
-                await self.on_tool_start_cb(tool_name, input_str, self.tool_start_count)
-            except Exception:
-                pass  # best effort, don't break tool execution on callback errors
-
-
 async def delegate_tool(
     description: str,
     agent_type: str | None,
@@ -149,20 +126,43 @@ async def delegate_tool(
 
         messages = [{"role": "user", "content": user_prompt}]
 
-        # Attach the progress reporting handler as a callback
-        callbacks = [ProgressReportingHandler(on_tool_start=tool_start_cb)]
-        config["callbacks"] = callbacks
-        # Run the agent once, with callbacks capturing tool starts
-        output = await agent.ainvoke({"messages": messages}, config=config)
-        # thread = agent.get_state(config).values["messages"]
-        # last_message = thread[-1]
+        # Run the agent with astream_events for clean event handling
+        final_ai_content = ""
+        tool_start_count = 0
+        invoke_input = {"messages": messages}
+
+        async for event in agent.astream_events(invoke_input, config=config, version="v2"):
+            event_type = event.get("event", "")
+            
+            if event_type == "on_tool_start":
+                tool_start_count += 1
+                tool_name = event.get("name", "unknown")
+                tool_inputs = event.get("data", {}).get("input", {})
+
+                # Log tool start to agent.log (via rich console)
+                console.print(f"tool_start=[tool={tool_name}] args={tool_inputs}")
+
+                # Invoke the progress callback if provided (passing the current count)
+                if tool_start_cb is not None:
+                    try:
+                        await tool_start_cb(tool_name, tool_inputs, tool_start_count)
+                    except Exception:
+                        pass  # best effort, don't break tool execution on callback errors
+
+            elif event_type == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk", None)
+                if chunk and hasattr(chunk, 'content') and chunk.content:
+                    final_ai_content += chunk.content
+
         console.print("DONE")
-        out_messages = output["messages"]
-        last_message = out_messages[-1]
-        # TODO better handling of output => response
-        #  don't just assume it's an AIMessage
+        output = await agent.aget_state(config)
+        out_messages = output.values.get("messages", [])
+        last_message = out_messages[-1] if out_messages else None
         console.print("output", output)
-        return [TextContent(type="text", text=last_message.content)]
+
+        # Return the accumulated AI response, or fall back to the last message content
+        response_content = final_ai_content if final_ai_content else (last_message.content if last_message else "")
+        return [TextContent(type="text", text=response_content)]
 
     try:
         return await _inner_delegate_tool(description, agent_type, on_tool_start)
