@@ -59,9 +59,22 @@ async def serve() -> None:
             elif requested_tool != DELEGATE_TOOL_NAME:
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
 
+            # Extract context for progress notifications
+            ctx = server.request_context
+            progress_token = ctx.meta.progressToken if ctx.meta else None
+
+            # Build the on_tool_start callback that sends MCP progress notifications
+            async def on_tool_start(tool_name: str, tool_args: dict, tool_start_count: int) -> None:
+                if progress_token is not None:
+                    await ctx.session.send_progress_notification(
+                        progress_token=progress_token,
+                        progress=tool_start_count,
+                        message=f"Running tool: {tool_name}",
+                    )
+
             description = arguments.get("description")
             agent_type = arguments.get("agent_type", "general")
-            return await delegate_tool(description, agent_type)
+            return await delegate_tool(description, agent_type, on_tool_start=on_tool_start)
 
         except asyncio.CancelledError:
             # TODO log unhandled cancellation? so I know that I need to push it inside the inner tool function?

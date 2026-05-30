@@ -3,6 +3,7 @@ import asyncio
 import os
 import rich
 from rich.console import Console
+from typing import Callable, Awaitable, Any
 # log to a log tmp file
 file = open('agent.log', 'a')
 console = Console(file=file)
@@ -11,6 +12,7 @@ console = Console(file=file)
 # import markdownify
 # import readabilipy.simple_json
 
+from langchain_core.callbacks import BaseCallbackHandler, AsyncCallbackHandler
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
@@ -89,11 +91,50 @@ async def setup_agent():
         tools=extra_tools,
     )
 
-async def delegate_tool(description: str, agent_type: str | None):
 
-    async def _inner_delegate_tool(desc: str, a_type: str | None) -> list[TextContent]:
+class ProgressReportingHandler(AsyncCallbackHandler):
+    """LangChain async callback handler that reports tool starts for MCP progress notifications."""
+
+    def __init__(self, on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None):
+        self.on_tool_start = on_tool_start
+        self.tool_start_count = 0
+
+    async def on_tool_start(self, serialized: dict, inputs: dict, *, run_id: str, **kwargs: Any) -> None:
+        tool_name = serialized.get("name", "unknown")
+        self.tool_start_count += 1
+
+        # Log tool start to agent.log (via rich console)
+        console.print(f"tool_start=[tool={tool_name}] args={inputs}")
+
+        # Invoke the progress callback if provided (passing the current count)
+        if self.on_tool_start is not None:
+            try:
+                await self.on_tool_start(tool_name, inputs, self.tool_start_count)
+            except Exception:
+                pass  # best effort, don't break tool execution on callback errors
+
+
+async def delegate_tool(
+    description: str,
+    agent_type: str | None,
+    on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None,
+):
+    """
+    Delegate to a subagent to perform a task and summarize findings.
+
+    Args:
+        description: The task description to delegate.
+        agent_type: Which subagent profile to use.
+        on_tool_start: Optional async callback invoked for each tool start event.
+                       Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
+    """
+    async def _inner_delegate_tool(
+        desc: str,
+        a_type: str | None,
+        tool_start_cb: Callable[[str, dict, int], Awaitable[None]] | None,
+    ) -> list[TextContent]:
         console.print("START")
-        # print(f"launching subagent {agent_type} with {description}")
+
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
         config: RunnableConfig = {"configurable": {"thread_id": None}}
@@ -107,8 +148,12 @@ async def delegate_tool(description: str, agent_type: str | None):
         ],
         # PRN accept recursion_limit arg?
         # await stream_messages(agent, messages, config=config) # TODO use a log file and stream to log file
-        # TODO also capture the final output from LangGraph chain to return to user
-        output = await agent.ainvoke({"messages": {"role": "user", "content": description}}, config=config)
+
+        # Attach the progress reporting handler as a callback
+        callbacks = [ProgressReportingHandler(on_tool_start=tool_start_cb)]
+
+        # Run the agent once, with callbacks capturing tool starts
+        output = await agent.ainvoke({"messages": messages}, config=config, callbacks=callbacks)
         # thread = agent.get_state(config).values["messages"]
         # last_message = thread[-1]
         console.print("DONE")
@@ -120,10 +165,10 @@ async def delegate_tool(description: str, agent_type: str | None):
         return [TextContent(type="text", text=last_message.content)]
 
     try:
-        return await _inner_delegate_tool(description, agent_type)
+        return await _inner_delegate_tool(description, agent_type, on_tool_start)
     except asyncio.CancelledError:
         # TODO cancel the request... need to implement astream_events most likely and cancel on start of next tool call?
-        console.print("CancelledError caught in delegate_tool", e)
+        console.print("CancelledError caught in delegate_tool")
         raise
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
