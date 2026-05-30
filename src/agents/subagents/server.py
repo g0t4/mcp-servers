@@ -44,8 +44,8 @@ async def serve() -> None:
             return [TextContent(type="text", text=f"DONE counting to {count_to}")]
 
         except asyncio.CancelledError as error:
-            # TODO what do I want to log instead of rich.inspect every time?
-            rich.inspect(error, console=console)
+            # TODO use logging instead of console.print w/ rich... can still use rich to print to file... as sink to the console object?
+            console.print("tool=COUNT", error)
             # FYI cannot send a progress notification... instead, server sends cancel confirm and that's it for comms
             raise
 
