@@ -13,6 +13,7 @@ console = Console(file=file)
 # import markdownify
 # import readabilipy.simple_json
 
+from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
 from langchain_llama_server import ChatLlamaServer
@@ -116,15 +117,14 @@ async def delegate_tool(
         #   just for duration of a single request
         config: RunnableConfig = {"configurable": {"thread_id": None}}
 
-        # Use dict format (role/content pairs) that ChatLlamaServer expects
-        # rather than HumanMessage objects (which caused "Message as a sequence" error)
+        # Use HumanMessage objects for proper LangChain integration
         user_prompt = description + """\n\n## APPROACH
     You are acting in an official sub-agent capactity.
     The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
     Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
     """
 
-        messages = [{"role": "user", "content": user_prompt}]
+        messages = [HumanMessage(content=user_prompt)]
 
         # Run the agent with astream_events for clean event handling
         final_ai_content = ""
