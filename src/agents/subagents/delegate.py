@@ -114,7 +114,7 @@ async def delegate_tool(
 
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
-        config: RunnableConfig = {"configurable": {"thread_id": None}}
+        config: RunnableConfig = {"recursion_limit": 50, "configurable": {"thread_id": None}}
 
         # Use HumanMessage objects for proper LangChain integration
         user_prompt = description + """\n\n## APPROACH
