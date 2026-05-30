@@ -5,7 +5,7 @@ set request_init '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"proto
 # initialized notification DOES NOT HAVE ID
 set notify_initialized '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
-set request_call_delegate '{ "jsonrpc": "2.0", "id": 2, "method":"tools/call","params":{"name":"count", "_meta": { "progressToken": "my-request2" } } }'
+set request_call_delegate '{ "jsonrpc": "2.0", "id": 2, "method":"tools/call","params":{"name":"count", "arguments": {"to": 10}, "_meta": { "progressToken": "my-request2" } } }'
 set notify_cancel '{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2,"reason":"test cancel"}}'
 
 begin
