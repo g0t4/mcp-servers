@@ -1,6 +1,7 @@
 from asyncio import CancelledError
 import asyncio
 import os
+from uuid import UUID
 import rich
 from rich.console import Console
 from typing import Callable, Awaitable, Any
@@ -95,10 +96,10 @@ class ProgressReportingHandler(AsyncCallbackHandler):
     """LangChain async callback handler that reports tool starts for MCP progress notifications."""
 
     def __init__(self, on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None):
-        self.on_tool_start = on_tool_start
+        self.on_tool_start_cb = on_tool_start
         self.tool_start_count = 0
 
-    async def on_tool_start(self, serialized: dict, inputs: dict, *, run_id: str, **kwargs: Any) -> None:
+    async def on_tool_start(self, serialized: dict[str, Any], input_str: str, *, run_id: UUID, parent_run_id: UUID | None = None, tags: list[str] | None = None, metadata: dict[str, Any] | None = None, inputs: dict[str, Any] | None = None, **kwargs: Any) -> None:
         tool_name = serialized.get("name", "unknown")
         self.tool_start_count += 1
 
@@ -106,9 +107,9 @@ class ProgressReportingHandler(AsyncCallbackHandler):
         console.print(f"tool_start=[tool={tool_name}] args={inputs}")
 
         # Invoke the progress callback if provided (passing the current count)
-        if self.on_tool_start is not None:
+        if self.on_tool_start_cb is not None:
             try:
-                await self.on_tool_start(tool_name, inputs, self.tool_start_count)
+                await self.on_tool_start_cb(tool_name, input_str, self.tool_start_count)
             except Exception:
                 pass  # best effort, don't break tool execution on callback errors
 
@@ -150,9 +151,9 @@ async def delegate_tool(
 
         # Attach the progress reporting handler as a callback
         callbacks = [ProgressReportingHandler(on_tool_start=tool_start_cb)]
-
+        config["callbacks"] = callbacks
         # Run the agent once, with callbacks capturing tool starts
-        output = await agent.ainvoke({"messages": messages}, config=config, callbacks=callbacks)
+        output = await agent.ainvoke({"messages": messages}, config=config)
         # thread = agent.get_state(config).values["messages"]
         # last_message = thread[-1]
         console.print("DONE")
