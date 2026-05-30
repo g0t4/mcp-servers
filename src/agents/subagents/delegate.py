@@ -37,6 +37,7 @@ COUNT_TOOL = Tool(
         'properties': {
             'to': { 'type': 'integer', 'description': 'the integer to count to', },
         },
+        'required': ['to'],
     }
 ) 
 
