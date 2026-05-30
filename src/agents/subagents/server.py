@@ -76,7 +76,8 @@ async def serve() -> None:
 
             description = arguments.get("description")
             agent_type = arguments.get("agent_type", "general")
-            return await delegate_tool(description, agent_type, on_tool_start=on_tool_start)
+            recursion_limit = arguments.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
+            return await delegate_tool(description, agent_type, recursion_limit, on_tool_start=on_tool_start)
 
         except asyncio.CancelledError:
             # TODO log unhandled cancellation? so I know that I need to push it inside the inner tool function?

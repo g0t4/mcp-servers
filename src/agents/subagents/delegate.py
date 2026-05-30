@@ -40,7 +40,9 @@ COUNT_TOOL = Tool(
         },
         'required': ['to'],
     }
-) 
+)
+
+DEFAULT_RECURSION_LIMIT = 50
 
 DELEGATE_TOOL = Tool(
     name=DELEGATE_TOOL_NAME,
@@ -54,8 +56,11 @@ DELEGATE_TOOL = Tool(
             'agent_type': {
                 'description': 'which subagent profile to use, options: ' + DELEGATE_TYPES,
                 'type': 'string',
+            },
+            'recursion_limit': {
+                'description': 'maximum number of tool call steps the subagent can take before stopping',
+                'type': 'integer',
             }
-            # TODO other options? limit # turns (recursion_limit?)
         },
         'required': ['description'],
         'type': 'object'
@@ -94,6 +99,7 @@ async def setup_agent():
 async def delegate_tool(
     description: str,
     agent_type: str | None,
+    recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None,
 ):
     """
@@ -102,19 +108,21 @@ async def delegate_tool(
     Args:
         description: The task description to delegate.
         agent_type: Which subagent profile to use.
+        recursion_limit: Maximum tool call steps before stopping (default: 50).
         on_tool_start: Optional async callback invoked for each tool start event.
                        Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
     """
     async def _inner_delegate_tool(
         desc: str,
         a_type: str | None,
+        r_limit: int,
         tool_start_cb: Callable[[str, dict, int], Awaitable[None]] | None,
     ) -> list[TextContent]:
         console.print("START")
 
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
-        config: RunnableConfig = {"recursion_limit": 50, "configurable": {"thread_id": None}}
+        config: RunnableConfig = {"recursion_limit": r_limit, "configurable": {"thread_id": None}}
 
         # Use HumanMessage objects for proper LangChain integration
         user_prompt = description + """\n\n## APPROACH
@@ -164,7 +172,7 @@ async def delegate_tool(
         return [TextContent(type="text", text=response_content)]
 
     try:
-        return await _inner_delegate_tool(description, agent_type, on_tool_start)
+        return await _inner_delegate_tool(description, agent_type, recursion_limit, on_tool_start)
     except asyncio.CancelledError:
         # TODO cancel the request... need to implement astream_events most likely and cancel on start of next tool call?
         console.print("CancelledError caught in delegate_tool")
