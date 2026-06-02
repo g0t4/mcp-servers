@@ -104,6 +104,10 @@ async def setup_agent():
                 "--verbose",
             ]
         }
+        # TODO port my semantic_grep tool to MCP so I can use it here too (and in other places)... right now it is in-process only in neovim
+        #   the Language Server for it is python based so most of the code is ready to roll
+        #
+        # btw run_process + fetch are likely plenty for now for subagents
     })
     mcp_tools = await client.get_tools()
     tools = mcp_tools  # PRN extend beyond just MCP
