@@ -2,12 +2,17 @@ from asyncio import CancelledError
 import asyncio
 import os
 from uuid import UUID
-import rich
+from pathlib import Path
 from rich.console import Console
+from rich.panel import Panel
 from typing import Callable, Awaitable, Any
-# log to a log tmp file
-file = open('agent.log', 'a')
-console = Console(file=file)
+
+# XDG-compliant log path: $XDG_STATE_HOME/mcp-servers/agent.log (falls back to ~/.local/state/mcp-servers/agent.log)
+_xdg_state = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+_log_dir = Path(_xdg_state) / "mcp-servers"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = open(_log_dir / "agent.log", "a")
+console = Console(file=_log_file, force_terminal=True)
 
 # might be helpful within your agent's tooling:
 # import markdownify
@@ -124,7 +129,7 @@ async def delegate_tool(
         r_limit: int,
         tool_start_cb: Callable[[str, dict, int], Awaitable[None]] | None,
     ) -> list[TextContent]:
-        console.print("START")
+        console.print(Panel("START", style="bold green"), highlight=True)
 
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
@@ -134,7 +139,7 @@ async def delegate_tool(
         user_prompt = description + """\n\n## APPROACH
     You are acting in an official sub-agent capactity.
     The user expects you to try again if something fails. That means a different set of arguments to a tool. Or a different tool. Whatever can achieve the requested outcome.
-    Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there! 
+    Do not just try one tool call and then stop with the result. Unless it is successful, then by all means stop there!
     """
 
         messages = [HumanMessage(content=user_prompt)]
@@ -146,14 +151,14 @@ async def delegate_tool(
 
         async for event in agent.astream_events(invoke_input, config=config, version="v2"):
             event_type = event.get("event", "")
-            
+
             if event_type == "on_tool_start":
                 tool_start_count += 1
                 tool_name = event.get("name", "unknown")
                 tool_inputs = event.get("data", {}).get("input", {})
 
                 # Log tool start to agent.log (via rich console)
-                console.print(f"tool_start=[tool={tool_name}] args={tool_inputs}")
+                console.print(f"  [bold yellow]tool_start[/] [cyan]{tool_name}[/] [dim]args={tool_inputs}[/]")
 
                 # Invoke the progress callback if provided (passing the current count)
                 if tool_start_cb is not None:
@@ -167,11 +172,11 @@ async def delegate_tool(
                 if chunk and hasattr(chunk, 'content') and chunk.content:
                     final_ai_content += chunk.content
 
-        console.print("DONE")
+        console.print(Panel("DONE", style="bold green"), highlight=True)
         output = await agent.aget_state(config)
         out_messages = output.values.get("messages", [])
         last_message = out_messages[-1] if out_messages else None
-        console.print("output", output)
+        console.print(f"[dim]output[/] [gray]{output}[/]")
 
         # Return the accumulated AI response, or fall back to the last message content
         response_content = final_ai_content if final_ai_content else (last_message.content if last_message else "")
@@ -181,7 +186,7 @@ async def delegate_tool(
         return await _inner_delegate_tool(description, agent_type, recursion_limit, on_tool_start)
     except asyncio.CancelledError:
         # TODO cancel the request... need to implement astream_events most likely and cancel on start of next tool call?
-        console.print("CancelledError caught in delegate_tool")
+        console.print(Panel("CancelledError caught in delegate_tool", style="bold red"), highlight=True)
         raise
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
