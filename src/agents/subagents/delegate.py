@@ -4,6 +4,7 @@ import json
 import os
 from uuid import UUID, uuid4
 from pathlib import Path
+from langchain.agents import create_agent
 from rich.console import Console
 from rich.panel import Panel
 from typing import Callable, Awaitable, Any
@@ -25,7 +26,6 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool
 from langchain_llama_server import ChatLlamaServer
-from deepagents import create_deep_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from mcp.types import TextContent, Tool
 from deepagents.backends import LocalShellBackend
@@ -81,7 +81,7 @@ DELEGATE_TOOL = Tool(
     })
 
 async def setup_agent():
-    global agent, client, extra_tools, model  # FYI need agent aside from GC issues
+    global agent, client, tools, model  # FYI need agent aside from GC issues
     client = MultiServerMCPClient({
         "fetch": {
             # I like my mods to fetch so just use it!
@@ -94,19 +94,28 @@ async def setup_agent():
                 "mcp-server-fetch",
             ],
         },
+        "run_process": {
+            "transport": "stdio",
+            "command": "npx",
+            "args": [
+                os.environ["HOME"] + "/repos/github/g0t4/mcp-server-commands/build/index.js",
+                # -- FYI leave --verbose on for now given I am using a log file so it s/b NBD
+                # --    this will be a huge help in troubleshooting hung tool calls and other issues
+                "--verbose",
+            ]
+        }
     })
     mcp_tools = await client.get_tools()
-    extra_tools = mcp_tools  # PRN extend beyond just MCP
+    tools = mcp_tools  # PRN extend beyond just MCP
     # TODO configurable tools per agent_type (lazy create agents w/ hardcoded lookup for tools)
     #  TODO add tools arg to tool too? so supervisor agent (MCP client) can pass what tools to provide? from predefined list
 
     model = ChatLlamaServer(base_url="http://ask.lan:8012", api_key="foo")
-    agent = create_deep_agent(
+    agent = create_agent(
         model,
         checkpointer=InMemorySaver(),
-        backend=LocalShellBackend(virtual_mode=False),
         # TODO how about limit dir to CWD only? Or pass a dir as an argument in main()
-        tools=extra_tools,
+        tools=tools,
     )
 
 
