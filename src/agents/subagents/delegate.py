@@ -1,7 +1,8 @@
 from asyncio import CancelledError
 import asyncio
+import json
 import os
-from uuid import UUID
+from uuid import UUID, uuid4
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
@@ -11,6 +12,8 @@ from typing import Callable, Awaitable, Any
 _xdg_state = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
 _log_dir = Path(_xdg_state) / "mcp-servers"
 _log_dir.mkdir(parents=True, exist_ok=True)
+_traces_dir = _log_dir / "traces"
+_traces_dir.mkdir(parents=True, exist_ok=True)
 _log_file = open(_log_dir / "agent.log", "a")
 console = Console(file=_log_file, force_terminal=True)
 
@@ -131,6 +134,32 @@ async def delegate_tool(
     ) -> list[TextContent]:
         console.print(Panel("START", style="bold green"), highlight=True)
 
+        # Generate a unique trace file per subagent run
+        trace_id = uuid4().hex[:12]
+        timestamp = asyncio.get_event_loop().time()
+        trace_file = _traces_dir / f"{timestamp:.6f}-{trace_id}.json"
+
+        # Initialize trace with metadata
+        trace_data: dict[str, Any] = {
+            "trace_id": trace_id,
+            "timestamp": timestamp,
+            "agent_type": a_type,
+            "recursion_limit": r_limit,
+            "description": description,
+            "events": [],
+        }
+
+        # Track AI response chunks for final output
+        final_ai_content = ""
+        tool_start_count = 0
+        current_ai_messages: list[dict[str, Any]] = []
+
+        def _write_trace_event(event: dict[str, Any]) -> None:
+            """Append an event to the trace file immediately."""
+            trace_data["events"].append(event)
+            with open(trace_file, "a") as f:
+                f.write(json.dumps(event, default=str) + "\n")
+
         # quick hack to get messages by providing thread_id to in memory store
         #   just for duration of a single request
         config: RunnableConfig = {"recursion_limit": r_limit, "configurable": {"thread_id": None}}
@@ -143,34 +172,116 @@ async def delegate_tool(
     """
 
         messages = [HumanMessage(content=user_prompt)]
-
-        # Run the agent with astream_events for clean event handling
-        final_ai_content = ""
-        tool_start_count = 0
         invoke_input = {"messages": messages}
 
-        async for event in agent.astream_events(invoke_input, config=config, version="v2"):
-            event_type = event.get("event", "")
+        # Capture the initial user message in the trace
+        _write_trace_event({
+            "type": "user_message",
+            "content": user_prompt,
+        })
 
-            if event_type == "on_tool_start":
-                tool_start_count += 1
-                tool_name = event.get("name", "unknown")
-                tool_inputs = event.get("data", {}).get("input", {})
+        # Run the agent with astream_events for clean event handling
+        _agent_completed_successfully = False
+        _event_loop_exception: Exception | None = None
+        try:
+            async for event in agent.astream_events(invoke_input, config=config, version="v2"):
+                event_type = event.get("event", "")
+                event_name = event.get("name", "")
 
-                # Log tool start to agent.log (via rich console)
-                console.print(f"  [bold yellow]tool_start[/] [cyan]{tool_name}[/] [dim]args={tool_inputs}[/]")
+                if event_type == "on_tool_start":
+                    tool_start_count += 1
+                    tool_name = event.get("name", "unknown")
+                    tool_inputs = event.get("data", {}).get("input", {})
 
-                # Invoke the progress callback if provided (passing the current count)
-                if tool_start_cb is not None:
-                    try:
-                        await tool_start_cb(tool_name, tool_inputs, tool_start_count)
-                    except Exception:
-                        pass  # best effort, don't break tool execution on callback errors
+                    # Log tool start to agent.log (via rich console)
+                    console.print(f"  [bold yellow]tool_start[/] [cyan]{tool_name}[/] [dim]args={tool_inputs}[/]")
 
-            elif event_type == "on_chat_model_stream":
-                chunk = event.get("data", {}).get("chunk", None)
-                if chunk and hasattr(chunk, 'content') and chunk.content:
-                    final_ai_content += chunk.content
+                    # Write to trace
+                    _write_trace_event({
+                        "type": "tool_start",
+                        "tool": tool_name,
+                        "inputs": tool_inputs,
+                        "step": tool_start_count,
+                    })
+
+                    # Invoke the progress callback if provided (passing the current count)
+                    if tool_start_cb is not None:
+                        try:
+                            await tool_start_cb(tool_name, tool_inputs, tool_start_count)
+                        except Exception:
+                            pass  # best effort, don't break tool execution on callback errors
+
+                elif event_type == "on_tool_end":
+                    tool_name = event.get("name", "unknown")
+                    tool_output = event.get("data", {}).get("output", None)
+                    console.print(f"  [dim]tool_end[/] [cyan]{tool_name}[/] [gray]output_len={len(str(tool_output)) if tool_output else 0}[/]")
+
+                    _write_trace_event({
+                        "type": "tool_end",
+                        "tool": tool_name,
+                        "output": tool_output,
+                        "step": tool_start_count,
+                    })
+
+                elif event_type == "on_tool_error":
+                    tool_name = event.get("name", "unknown")
+                    error = event.get("error", None)
+                    console.print(f"  [bold red]tool_error[/] [cyan]{tool_name}[/] [red]{error}[/]")
+
+                    _write_trace_event({
+                        "type": "tool_error",
+                        "tool": tool_name,
+                        "error": str(error),
+                        "step": tool_start_count,
+                    })
+
+                elif event_type == "on_chat_model_start":
+                    # Track when the model begins generating
+                    current_ai_messages.append({
+                        "type": "ai_generation_start",
+                        "model": event_name,
+                    })
+
+                elif event_type == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk", None)
+                    if chunk and hasattr(chunk, 'content') and chunk.content:
+                        final_ai_content += chunk.content
+
+                elif event_type == "on_chat_model_end":
+                    # Track AI generation completion
+                    current_ai_messages.append({
+                        "type": "ai_generation_end",
+                        "model": event_name,
+                        "accumulated_content": final_ai_content[-500:] if final_ai_content else "",  # last 500 chars
+                    })
+                    if current_ai_messages:
+                        _write_trace_event({
+                            "type": "ai_messages",
+                            "messages": current_ai_messages,
+                        })
+                        current_ai_messages = []
+
+            _agent_completed_successfully = True
+
+        except Exception as error:
+            _event_loop_exception = error
+            raise
+
+        finally:
+            # Always finalize the trace, regardless of success/failure
+            if _event_loop_exception is not None:
+                final_status = "failed"
+                error_message = str(_event_loop_exception)
+            else:
+                final_status = "success"
+                error_message = ""
+
+            _write_trace_event({
+                "type": "agent_complete",
+                "status": final_status,
+                "total_tools_called": tool_start_count,
+                "error": error_message if error_message else None,
+            })
 
         console.print(Panel("DONE", style="bold green"), highlight=True)
         output = await agent.aget_state(config)
@@ -187,6 +298,9 @@ async def delegate_tool(
     except asyncio.CancelledError:
         # TODO cancel the request... need to implement astream_events most likely and cancel on start of next tool call?
         console.print(Panel("CancelledError caught in delegate_tool", style="bold red"), highlight=True)
+        raise
+    except Exception as error:
+        console.print(Panel(f"ERROR: {error}", style="bold red"), highlight=True)
         raise
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
