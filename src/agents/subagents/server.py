@@ -39,6 +39,7 @@ async def serve() -> None:
                         progress_token=ctx.meta.progressToken,
                         progress=(i + 1),
                         total=100,
+                        message=f"Counting {i + 1} of {count_to}",
                     )
                 else:
                     return [TextContent(type="text", text=f"Missing a progressToken, cannot count, please add one and try again")]
