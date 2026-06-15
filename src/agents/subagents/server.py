@@ -27,7 +27,8 @@ async def serve() -> None:
         # async def list_prompts() -> list[Prompt]:
         #     return [Prompt( arguments=[PromptArgument(description="", agent_type="", required=True)],)]
 
-    async def count(count_to: int):
+    async def count(arguments: dict):
+        count_to = arguments['to']
         try:
             # for testing cancellation timing and progress notifications
             for i in range(0, count_to):
@@ -56,8 +57,7 @@ async def serve() -> None:
         try:
             if requested_tool == COUNT_TOOL_NAME:
                 # PRN remove unregistered count tool, purely for testing cancel and progress notifications
-                to = int(arguments['to'])
-                return await count(to)
+                return await count(arguments)
 
             if requested_tool != DELEGATE_TOOL_NAME:
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
