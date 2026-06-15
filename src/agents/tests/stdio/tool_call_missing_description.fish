@@ -12,7 +12,7 @@ begin
     sleep 1
     echo $notify_initialized
     echo $request_call_delegate
-    sleep 1
+    sleep 2
 end | uv run \
     --directory ~/repos/github/g0t4/mcp-servers/src/agents \
     -m subagents \
