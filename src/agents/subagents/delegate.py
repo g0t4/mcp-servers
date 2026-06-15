@@ -79,6 +79,7 @@ async def setup_agent():
                 "run",
                 "--directory",
                 os.environ["HOME"] + "/repos/github/g0t4/mcp-servers/src/fetch",
+                # DO not run official pypi version as it has a STUPID robots.txt check ON EVERY GODDAMN FETCH ... 2 calls per plus it shits a brick if someone sez no your agent no my special site
                 "mcp-server-fetch",
             ],
         },
@@ -92,16 +93,10 @@ async def setup_agent():
                 "--verbose",
             ]
         }
-        # TODO port my semantic_grep tool to MCP so I can use it here too (and in other places)... right now it is in-process only in neovim
-        #   the Language Server for it is python based so most of the code is ready to roll
-        #
-        # btw run_process + fetch are likely plenty for now for subagents
     })
     mcp_tools = await client.get_tools()
     console.print("mcp_tools", mcp_tools)
     tools = mcp_tools  # PRN extend beyond just MCP
-    # TODO configurable tools per agent_type (lazy create agents w/ hardcoded lookup for tools)
-    #  TODO add tools arg to tool too? so supervisor agent (MCP client) can pass what tools to provide? from predefined list
 
     model = ChatLlamaServer(base_url="http://ask.lan:8012", api_key="foo")
     agent = create_agent(
