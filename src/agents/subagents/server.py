@@ -58,7 +58,8 @@ async def serve() -> None:
                 # PRN remove unregistered count tool, purely for testing cancel and progress notifications
                 to = int(arguments['to'])
                 return await count(to)
-            elif requested_tool != DELEGATE_TOOL_NAME:
+
+            if requested_tool != DELEGATE_TOOL_NAME:
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
 
             # Extract context for progress notifications
