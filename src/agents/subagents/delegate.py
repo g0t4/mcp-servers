@@ -39,33 +39,30 @@ DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-f
 
 DEFAULT_RECURSION_LIMIT = 50
 
-RECURSION_LIMIT_DESC = (
-    "LangChain's max messages for the subagent before stopping. Each subagent tool call "
-    "produces 2 messages (input + output). Leave unset unless the task needs more or "
-    "fewer than the default (50)."
-)
+RECURSION_LIMIT_DESC = ("LangChain's max messages for the subagent before stopping. Each subagent tool call "
+                        "produces 2 messages (input + output). Leave unset unless the task needs more or "
+                        "fewer than the default (50).")
 
-DELEGATE_TOOL = Tool(
-    name=DELEGATE_TOOL_NAME,
-    description="Delegate to a subagent to perform relevent tasks and summarize findings.",
-    inputSchema={
-        'properties': {
-            'description': {
-                'description': 'describe the task for the agent to perform',
-                'type': 'string'
-            },
-            'agent_type': {
-                'description': 'which subagent profile to use, options: ' + DELEGATE_TYPES,
-                'type': 'string',
-            },
-            'recursion_limit': {
-                'description': RECURSION_LIMIT_DESC,
-                'type': 'integer',
-            }
-        },
-        'required': ['description'],
-        'type': 'object'
-    })
+DELEGATE_TOOL = Tool(name=DELEGATE_TOOL_NAME,
+                     description="Delegate to a subagent to perform relevent tasks and summarize findings.",
+                     inputSchema={
+                         'properties': {
+                             'description': {
+                                 'description': 'describe the task for the agent to perform',
+                                 'type': 'string'
+                             },
+                             'agent_type': {
+                                 'description': 'which subagent profile to use, options: ' + DELEGATE_TYPES,
+                                 'type': 'string',
+                             },
+                             'recursion_limit': {
+                                 'description': RECURSION_LIMIT_DESC,
+                                 'type': 'integer',
+                             }
+                         },
+                         'required': ['description'],
+                         'type': 'object'
+                     })
 
 async def setup_agent():
     global agent, client, tools, model  # FYI need agent aside from GC issues
@@ -106,7 +103,6 @@ async def setup_agent():
         tools=tools,
     )
 
-
 async def delegate_tool(
     description: str,
     agent_type: str | None,
@@ -123,6 +119,7 @@ async def delegate_tool(
         on_tool_start: Optional async callback invoked for each tool start event.
                        Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
     """
+
     async def _inner_delegate_tool(
         desc: str,
         a_type: str | None,
