@@ -74,8 +74,9 @@ async def setup_agent():
             # I like my mods to fetch so just use it!
             #  also might feel "wrong" that I already have fetch in ask-openai.nvim... but that's for supervisor! this makes fetch avail for subagents to go crazy and then report back a concise response
             "transport": "stdio",
-            "command": "uvx",
+            "command": "uv",
             "args": [
+                "run",
                 "--directory",
                 os.environ["HOME"] + "/repos/github/g0t4/mcp-servers/src/fetch",
                 "mcp-server-fetch",
