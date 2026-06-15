@@ -14,6 +14,7 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from subagents.delegate import *
+from subagents.count import COUNT_TOOL, COUNT_TOOL_NAME, count
 
 DEBUGGING = False
 
@@ -32,37 +33,12 @@ async def serve() -> None:
         # async def list_prompts() -> list[Prompt]:
         #     return [Prompt( arguments=[PromptArgument(description="", agent_type="", required=True)],)]
 
-    async def count(arguments: dict):
-        count_to = arguments['to']
-        try:
-            # * for testing cancellation timing and progress notifications
-            for i in range(0, count_to):
-                await asyncio.sleep(0.2)
-
-                ctx = server.request_context
-                if ctx.meta and ctx.meta.progressToken:
-                    await ctx.session.send_progress_notification(
-                        progress_token=ctx.meta.progressToken,
-                        progress=(i + 1),
-                        total=100,
-                        message=f"Counting {i + 1} of {count_to}",
-                    )
-                else:
-                    return [TextContent(type="text", text=f"Missing a progressToken, cannot count, please add one and try again")]
-            return [TextContent(type="text", text=f"DONE counting to {count_to}")]
-
-        except asyncio.CancelledError as error:
-            # TODO use logging instead of console.print w/ rich... can still use rich to print to file... as sink to the console object?
-            console.print("tool=COUNT", error)
-            # FYI cannot send a progress notification... instead, server sends cancel confirm and that's it for comms
-            raise
-
     @server.call_tool()
     async def call_tool(requested_tool, arguments: dict) -> list[TextContent]:
         try:
             if requested_tool == COUNT_TOOL_NAME:
                 # PRN remove unregistered count tool, purely for testing cancel and progress notifications
-                return await count(arguments)
+                return await count(server, arguments)
 
             if requested_tool != DELEGATE_TOOL_NAME:
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
