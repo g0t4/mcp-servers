@@ -92,7 +92,7 @@ async def setup_agent():
         }
     })
     mcp_tools = await client.get_tools()
-    console.print("mcp_tools", mcp_tools)
+    # console.print("mcp_tools", mcp_tools)
     tools = mcp_tools  # PRN extend beyond just MCP
 
     model = ChatLlamaServer(base_url="http://ask.lan:8012", api_key="foo")
@@ -304,6 +304,7 @@ async def delegate_tool(
         #  notably I might want to build a tree (esp if subagents can have subagents)... and render that at end (in finally block)
         #  and/or render it along the way too so I can monitor... that way things are organized as they make sense with parallelism 
 
+        # TODO am I using messages or only streaming chunks accumulation (above)? I think the latter but I cannot recall all cases here
         out_messages = output.values.get("messages", [])
         last_message = out_messages[-1] if out_messages else None
         console.print(f"[dim]output[/] [gray]{output}[/]")
