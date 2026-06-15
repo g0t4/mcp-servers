@@ -21,3 +21,4 @@ subagents  = "subagents:main"
 
 [tool.uv.sources]
 langchain-llama-server = { path = "../../../langchain-llama-server" }
+langchain-mcp-adapters = { path = "../../../../langchain-ai/langchain-mcp-adapters" }
