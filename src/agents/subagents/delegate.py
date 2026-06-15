@@ -144,7 +144,8 @@ async def delegate_tool(
         }
 
         # Track AI response chunks for final output
-        final_ai_content = ""
+        last_ai_content = ""
+        last_ai_reasoning = ""
         tool_start_count = 0
         current_ai_messages: list[dict[str, Any]] = []
 
@@ -235,18 +236,35 @@ async def delegate_tool(
                         "type": "ai_generation_start",
                         "model": event_name,
                     })
+                    last_ai_content = ""
+                    last_ai_reasoning = ""
 
                 elif event_type == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk", None)
-                    if chunk and hasattr(chunk, 'content') and chunk.content:
-                        final_ai_content += chunk.content
+                    if chunk:
+                        console.print("chunk", chunk)
+                        if hasattr(chunk, 'content') and chunk.content:
+                            last_ai_content += chunk.content
+                        if hasattr(chunk, 'additional_kwargs'):
+                            last_ai_reasoning += chunk.additional_kwargs.get('reasoning_content', '')
+                        # FYI could accumulate reasoning per AI message... to see what drove tool call decisions
+                    # AIMessageChunk(
+                    #     content='',
+                    #     additional_kwargs={'reasoning_content': ' a'},
+                    #     response_metadata={'model_provider': 'llama_server'},
+                    #     id='lc_run--019ecd5d-e866-7fc0-8c73-6be7e584082d',
+                    #     tool_calls=[],
+                    #     invalid_tool_calls=[],
+                    #     tool_call_chunks=[]
+                    # )
 
                 elif event_type == "on_chat_model_end":
                     # Track AI generation completion
                     current_ai_messages.append({
                         "type": "ai_generation_end",
                         "model": event_name,
-                        "accumulated_content": final_ai_content[-500:] if final_ai_content else "",  # last 500 chars
+                        "content": last_ai_content or "",
+                        "reasoning": last_ai_reasoning or "",
                     })
                     if current_ai_messages:
                         _write_trace_event({
@@ -279,14 +297,16 @@ async def delegate_tool(
 
         console.print(Panel("DONE", style="bold green"), highlight=True)
         output = await agent.aget_state(config)
+        # TODO something is wronger than wrong here... I need too look into WTF is going on failures here...
+        #  failure = null response for final message below
         out_messages = output.values.get("messages", [])
         last_message = out_messages[-1] if out_messages else None
         console.print(f"[dim]output[/] [gray]{output}[/]")
-        console.print(f"[dim]final_ai_content[/] {final_ai_content}")
+        console.print(f"[dim]final_ai_content[/] {last_ai_content}")
         console.print(f"[dim]last_message[/] {last_message}")
 
         # Return the accumulated AI response, or fall back to the last message content
-        response_content = final_ai_content if final_ai_content else (last_message.content if last_message else "")
+        response_content = last_ai_content if last_ai_content else (last_message.content if last_message else "")
         return [TextContent(type="text", text=response_content)]
 
     try:
