@@ -297,8 +297,13 @@ async def delegate_tool(
 
         console.print(Panel("DONE", style="bold green"), highlight=True)
         output = await agent.aget_state(config)
-        # TODO something is wronger than wrong here... I need too look into WTF is going on failures here...
-        #  failure = null response for final message below
+
+        # TODO! review all of this logic for what to return from delegate subagent...
+        #  I added some good tracing but I might still want some failure edge cases
+        #  TODO review my stream_messages python module from my course to see what else I might want to use...
+        #  notably I might want to build a tree (esp if subagents can have subagents)... and render that at end (in finally block)
+        #  and/or render it along the way too so I can monitor... that way things are organized as they make sense with parallelism 
+
         out_messages = output.values.get("messages", [])
         last_message = out_messages[-1] if out_messages else None
         console.print(f"[dim]output[/] [gray]{output}[/]")
