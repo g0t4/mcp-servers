@@ -97,6 +97,7 @@ async def setup_agent():
         # btw run_process + fetch are likely plenty for now for subagents
     })
     mcp_tools = await client.get_tools()
+    console.print("mcp_tools", mcp_tools)
     tools = mcp_tools  # PRN extend beyond just MCP
     # TODO configurable tools per agent_type (lazy create agents w/ hardcoded lookup for tools)
     #  TODO add tools arg to tool too? so supervisor agent (MCP client) can pass what tools to provide? from predefined list
@@ -288,6 +289,8 @@ async def delegate_tool(
         out_messages = output.values.get("messages", [])
         last_message = out_messages[-1] if out_messages else None
         console.print(f"[dim]output[/] [gray]{output}[/]")
+        console.print(f"[dim]final_ai_content[/] {final_ai_content}")
+        console.print(f"[dim]last_message[/] {last_message}")
 
         # Return the accumulated AI response, or fall back to the last message content
         response_content = final_ai_content if final_ai_content else (last_message.content if last_message else "")
