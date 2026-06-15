@@ -15,13 +15,18 @@ from mcp.types import (
 )
 from subagents.delegate import *
 
+DEBUGGING = False
+
 async def serve() -> None:
     server = Server("subagents")
     await setup_agent()  # PRN await this after server running?
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return [DELEGATE_TOOL, COUNT_TOOL]
+        tools = [DELEGATE_TOOL]
+        if DEBUGGING:
+            tools.append(COUNT_TOOL)
+        return tools
 
         # @server.list_prompts()
         # async def list_prompts() -> list[Prompt]:
@@ -30,7 +35,7 @@ async def serve() -> None:
     async def count(arguments: dict):
         count_to = arguments['to']
         try:
-            # for testing cancellation timing and progress notifications
+            # * for testing cancellation timing and progress notifications
             for i in range(0, count_to):
                 await asyncio.sleep(0.2)
 
