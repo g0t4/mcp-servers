@@ -15,8 +15,10 @@ from mcp.types import (
 )
 from subagents.delegate import *
 from subagents.count import COUNT_TOOL, COUNT_TOOL_NAME, count
+from subagents.screencap import SCREENCAP_TOOL, SCREENCAP_TOOL_NAME, screencap
 
 DEBUGGING = False
+
 
 async def serve() -> None:
     server = Server("subagents")
@@ -24,7 +26,7 @@ async def serve() -> None:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        tools = [DELEGATE_TOOL]
+        tools = [DELEGATE_TOOL, SCREENCAP_TOOL]
         if DEBUGGING:
             tools.append(COUNT_TOOL)
         return tools
@@ -40,8 +42,14 @@ async def serve() -> None:
                 # PRN remove unregistered count tool, purely for testing cancel and progress notifications
                 return await count(server, arguments)
 
+            if requested_tool == SCREENCAP_TOOL_NAME:
+                return await screencap(server, arguments)
+
             if requested_tool != DELEGATE_TOOL_NAME:
-                raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": DELEGATE_TOOL}))
+                valid_tools = [DELEGATE_TOOL.name, SCREENCAP_TOOL_NAME]
+                if DEBUGGING:
+                    valid_tools.append(COUNT_TOOL_NAME)
+                raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": valid_tools}))
 
             # Extract context for progress notifications
             ctx = server.request_context
