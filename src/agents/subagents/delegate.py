@@ -18,6 +18,8 @@ _traces_dir.mkdir(parents=True, exist_ok=True)
 _log_file = open(_log_dir / "agent.log", "a")
 console = Console(file=_log_file, force_terminal=True)
 
+# console.print('env', os.environ)
+
 # might be helpful within your agent's tooling:
 # import markdownify
 # import readabilipy.simple_json
