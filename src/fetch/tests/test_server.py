@@ -1,10 +1,14 @@
 """Tests for the fetch MCP server."""
 
+import anyio
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
+from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.types import CancelledNotification, CancelledNotificationParams
 
 from mcp_server_fetch.server import (
+    create_server,
     extract_content_from_html,
     fetch_url,
 )
@@ -187,3 +191,53 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestCancellation:
+    """Tests for client-side request cancellation."""
+
+    @pytest.mark.asyncio
+    async def test_client_cancel_aborts_inflight_request(self):
+        """A client's notifications/cancelled aborts the matching request."""
+        server = create_server()
+
+        started = anyio.Event()
+        cancelled = anyio.Event()
+        errors = []
+
+        async def hanging_fetch(*args, **kwargs):
+            started.set()
+            try:
+                await anyio.sleep(60)
+            except anyio.get_cancelled_exc_class():
+                cancelled.set()
+                raise
+
+        async with create_connected_server_and_client_session(server) as client:
+            with patch("mcp_server_fetch.server.fetch_url", hanging_fetch):
+                # The request id the next call_tool will use.
+                request_id = client._request_id
+
+                async def call_tool_expect_cancel():
+                    try:
+                        await client.call_tool(
+                            "fetch", {"url": "https://example.com/slow"}
+                        )
+                    except Exception as e:
+                        errors.append(e)
+
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(call_tool_expect_cancel)
+                    await started.wait()
+                    await client.send_notification(
+                        CancelledNotification(
+                            params=CancelledNotificationParams(requestId=request_id)
+                        )
+                    )
+                    with anyio.fail_after(5):
+                        await cancelled.wait()
+                    # Give the client task a moment to receive the cancel error.
+                    await anyio.sleep(0.2)
+
+        assert cancelled.is_set()
+        assert [str(e) for e in errors] == ["Request cancelled"]

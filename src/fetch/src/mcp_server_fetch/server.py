@@ -107,13 +107,14 @@ class Fetch(BaseModel):
     ]
 
 
-async def serve(
-    proxy_url: str | None = None,
-) -> None:
-    """Run the fetch MCP server.
+def create_server(proxy_url: str | None = None) -> Server:
+    """Create a configured fetch MCP server.
 
     Args:
         proxy_url: Optional proxy URL to use for requests
+
+    Returns:
+        A configured Server instance with tools and prompts.
     """
     server = Server("mcp-fetch")
 
@@ -221,6 +222,19 @@ async def serve(
                 )
             ],
         )
+
+    return server
+
+
+async def serve(
+    proxy_url: str | None = None,
+) -> None:
+    """Run the fetch MCP server.
+
+    Args:
+        proxy_url: Optional proxy URL to use for requests
+    """
+    server = create_server(proxy_url)
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
