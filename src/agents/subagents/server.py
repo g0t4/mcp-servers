@@ -21,9 +21,13 @@ from subagents.locate.tool import LOCATE_ANYTHING_TOOL, LOCATE_ANYTHING_TOOL_NAM
 DEBUGGING = False
 
 
-async def serve() -> None:
+def create_server() -> Server:
+    """Create a configured subagents MCP server.
+
+    Returns:
+        A configured Server instance with tools and prompts.
+    """
     server = Server("subagents")
-    await setup_agent()  # PRN await this after server running?
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -47,8 +51,11 @@ async def serve() -> None:
                 return await screencap(server, arguments)
 
             if requested_tool == LOCATE_ANYTHING_TOOL_NAME:
-                result = await locate_anything(**arguments)
-                return [TextContent(type="text", text=str(result))]
+                # Inference is blocking CPU/GPU work; run it in a worker thread so
+                # the event loop stays free to process cancellations and other
+                # requests while the model generates.
+                result = await asyncio.to_thread(locate_anything, **arguments)
+                return [TextContent(type="text", text=result)]
 
             if requested_tool != DELEGATE_TOOL_NAME:
                 valid_tools = [DELEGATE_TOOL.name, SCREENCAP_TOOL_NAME, LOCATE_ANYTHING_TOOL_NAME]
@@ -86,6 +93,13 @@ async def serve() -> None:
         except Exception as error:
             rich.inspect(error, console=console)
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=str(error)))
+
+    return server
+
+
+async def serve() -> None:
+    server = create_server()
+    await setup_agent()  # PRN await this after server running?
 
     # * start the server
     options = server.create_initialization_options()

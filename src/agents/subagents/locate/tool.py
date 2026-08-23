@@ -24,6 +24,6 @@ LOCATE_ANYTHING_TOOL = Tool(
 )
 
 
-async def locate_anything(question: str, image_path: str) -> str:
+def locate_anything(question: str, image_path: str) -> str:
     from subagents.locate.worker import locate_anything_infer
     return locate_anything_infer(image_path, question)

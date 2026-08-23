@@ -44,8 +44,13 @@ async def screencap(server: Server, arguments: dict) -> list[TextContent]:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await result.communicate()
-        
+        try:
+            stdout, stderr = await result.communicate()
+        except asyncio.CancelledError:
+            # Don't leave a hung screencapture process behind when cancelled.
+            result.kill()
+            raise
+
         if result.returncode != 0:
             raise Exception(f"screencapture failed with return code {result.returncode}: {stderr.decode('utf-8')}")
         
