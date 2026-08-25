@@ -1,0 +1,33 @@
+[project]
+name = "mcp-server-xonsh"
+version = "0.1.0"
+description = "An MCP execution primitive combining Xonsh subprocess syntax with Python"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.1.3,<2",
+    "xonsh==0.23.6",
+]
+
+[project.scripts]
+mcp-server-xonsh = "mcp_server_xonsh:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["-p", "no:xonsh"]
+
+[tool.ruff]
+line-length = 88
