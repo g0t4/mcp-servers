@@ -26,8 +26,8 @@ def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
     return data.decode("utf-8", errors="replace"), truncated, original_bytes
 
 
-def _resolve_cwd(cwd: str | None) -> Path:
-    path = Path(cwd or os.getcwd()).expanduser().resolve()
+def _resolve_cwd(cwd: str | None, default_cwd: str | None = None) -> Path:
+    path = Path(cwd or default_cwd or os.getcwd()).expanduser().resolve()
     if not path.exists():
         raise ValueError(f"cwd does not exist: {path}")
     if not path.is_dir():
@@ -60,6 +60,7 @@ async def execute_xonsh(
     code: str,
     *,
     cwd: str | None = None,
+    default_cwd: str | None = None,
     stdin: str | None = None,
     env: dict[str, str | None] | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
@@ -77,7 +78,7 @@ async def execute_xonsh(
             f"max_output_bytes must be between 1 and {MAX_OUTPUT_BYTES}"
         )
 
-    resolved_cwd = _resolve_cwd(cwd)
+    resolved_cwd = _resolve_cwd(cwd, default_cwd)
     started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -135,7 +136,7 @@ async def execute_xonsh(
     }
 
 
-def create_server() -> FastMCP:
+def create_server(workdir: str | None = None) -> FastMCP:
     server = FastMCP(
         "xonsh",
         instructions=(
@@ -165,6 +166,7 @@ def create_server() -> FastMCP:
         result = await execute_xonsh(
             code,
             cwd=cwd,
+            default_cwd=workdir,
             stdin=stdin,
             env=env,
             timeout_seconds=timeout_seconds,
@@ -184,8 +186,13 @@ def main() -> None:
         choices=("stdio", "streamable-http"),
         default="stdio",
     )
+    parser.add_argument(
+        "--workdir",
+        default=None,
+        help="Default working directory for run_xonsh when no cwd is provided.",
+    )
     args = parser.parse_args()
-    create_server().run(transport=args.transport)
+    create_server(workdir=args.workdir).run(transport=args.transport)
 
 
 if __name__ == "__main__":
