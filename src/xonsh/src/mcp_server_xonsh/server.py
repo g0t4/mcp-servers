@@ -188,8 +188,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--workdir",
-        default=None,
-        help="Default working directory for run_xonsh when no cwd is provided.",
+        default=os.environ.get("MCP_XONSH_WORKDIR"),
+        help=(
+            "Default working directory for run_xonsh when no cwd is provided. "
+            "Falls back to the MCP_XONSH_WORKDIR environment variable."
+        ),
     )
     args = parser.parse_args()
     create_server(workdir=args.workdir).run(transport=args.transport)
