@@ -3,20 +3,15 @@ import asyncio
 import json
 import os
 from uuid import UUID, uuid4
-from pathlib import Path
 from langchain.agents import create_agent
-from rich.console import Console
 from rich.panel import Panel
 from typing import Callable, Awaitable, Any
 
-# XDG-compliant log path: $XDG_STATE_HOME/mcp-servers/agent.log (falls back to ~/.local/state/mcp-servers/agent.log)
-_xdg_state = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
-_log_dir = Path(_xdg_state) / "mcp-servers"
-_log_dir.mkdir(parents=True, exist_ok=True)
-_traces_dir = _log_dir / "traces"
-_traces_dir.mkdir(parents=True, exist_ok=True)
-_log_file = open(_log_dir / "agent.log", "a")
-console = Console(file=_log_file, force_terminal=True)
+from subagents.mcp_logging import LogContext
+
+_log = LogContext("agent")
+console = _log.console
+_traces_dir = _log.traces_dir
 
 # console.print('env', os.environ)
 

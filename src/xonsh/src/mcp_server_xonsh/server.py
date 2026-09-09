@@ -11,11 +11,15 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp_server_xonsh.mcp_logging import LogContext
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_OUTPUT_BYTES = 1_000_000
 MAX_TIMEOUT_SECONDS = 600.0
 MAX_OUTPUT_BYTES = 10_000_000
+
+_log = LogContext("xonsh")
+console = _log.console
 
 
 def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
@@ -79,6 +83,12 @@ async def execute_xonsh(
         )
 
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
+    code_preview = code if len(code) <= 200 else code[:200] + "..."
+    console.print(
+        f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
+        f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]"
+    )
+    console.print(f"  [dim]{code_preview}[/]")
     started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -122,12 +132,22 @@ async def execute_xonsh(
     stderr_text, stderr_truncated, stderr_bytes = _truncate(
         stderr, max_output_bytes
     )
+    duration_ms = round((time.monotonic() - started) * 1000)
+    console.print(
+        f"  [dim]exit[/] [cyan]{process.returncode}[/] "
+        f"[dim]duration_ms={duration_ms}[/] "
+        f"[dim]timed_out={timed_out}[/] "
+        f"[dim]stdout_truncated={stdout_truncated}[/] "
+        f"[dim]stderr_truncated={stderr_truncated}[/] "
+        f"[dim]stdout_bytes={stdout_bytes}[/] "
+        f"[dim]stderr_bytes={stderr_bytes}[/]"
+    )
     return {
         "exit_code": process.returncode,
         "stdout": stdout_text,
         "stderr": stderr_text,
         "cwd": str(resolved_cwd),
-        "duration_ms": round((time.monotonic() - started) * 1000),
+        "duration_ms": duration_ms,
         "timed_out": timed_out,
         "stdout_truncated": stdout_truncated,
         "stderr_truncated": stderr_truncated,
