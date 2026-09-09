@@ -1,5 +1,7 @@
 import rich
 import asyncio
+import os
+from pathlib import Path
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -19,6 +21,18 @@ from subagents.screencap import SCREENCAP_TOOL, SCREENCAP_TOOL_NAME, screencap
 from subagents.locate.tool import LOCATE_ANYTHING_TOOL, LOCATE_ANYTHING_TOOL_NAME, locate_anything
 
 DEBUGGING = False
+
+
+def _resolve_workdir(workdir: str | None = None) -> str | None:
+    """Resolve a workdir CLI arg, validating it exists and is a directory."""
+    if workdir is None:
+        return None
+    path = Path(workdir).expanduser().resolve()
+    if not path.exists():
+        raise ValueError(f"workdir does not exist: {path}")
+    if not path.is_dir():
+        raise ValueError(f"workdir is not a directory: {path}")
+    return str(path)
 
 
 def create_server() -> Server:
@@ -97,7 +111,10 @@ def create_server() -> Server:
     return server
 
 
-async def serve() -> None:
+async def serve(workdir: str | None = None) -> None:
+    resolved_workdir = _resolve_workdir(workdir)
+    if resolved_workdir is not None:
+        os.chdir(resolved_workdir)
     server = create_server()
     await setup_agent()  # PRN await this after server running?
 
