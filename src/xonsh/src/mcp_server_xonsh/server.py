@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import signal
 import sys
@@ -11,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, TextContent
 from mcp_server_xonsh.mcp_logging import LogContext
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -58,6 +58,35 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     env["XONSH_SUBPROC_CMD_RAISE_ERROR"] = "False"
     env["XONSH_SUBPROC_RAISE_ERROR"] = "False"
     return env
+
+
+def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
+    """Map an execution result to labeled text content blocks.
+
+    Emitting one block per field keeps output readable and avoids a
+    monolithic JSON blob being duplicated into `structuredContent`.
+    """
+    blocks: list[TextContent] = []
+    if result["stdout"]:
+        blocks.append(TextContent(type="text", text=f"STDOUT:\n{result['stdout']}"))
+    if result["stderr"]:
+        blocks.append(TextContent(type="text", text=f"STDERR:\n{result['stderr']}"))
+    blocks.append(
+        TextContent(
+            type="text",
+            text=(
+                f"EXIT CODE: {result['exit_code']}\n"
+                f"CWD: {result['cwd']}\n"
+                f"DURATION: {result['duration_ms']}ms\n"
+                f"TIMED OUT: {result['timed_out']}\n"
+                f"STDOUT TRUNCATED: {result['stdout_truncated']}\n"
+                f"STDERR TRUNCATED: {result['stderr_truncated']}\n"
+                f"STDOUT BYTES: {result['stdout_bytes']}\n"
+                f"STDERR BYTES: {result['stderr_bytes']}"
+            ),
+        )
+    )
+    return blocks
 
 
 async def execute_xonsh(
@@ -182,7 +211,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         env: dict[str, str | None] | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
-    ) -> str:
+    ) -> CallToolResult:
         result = await execute_xonsh(
             code,
             cwd=cwd,
@@ -192,7 +221,10 @@ def create_server(workdir: str | None = None) -> FastMCP:
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
         )
-        return json.dumps(result, indent=2)
+        return CallToolResult(
+            content=_result_to_content(result),
+            isError=False,
+        )
 
     return server
 
