@@ -195,6 +195,11 @@ async def execute_xonsh(
 
 
 def create_server(workdir: str | None = None) -> FastMCP:
+    # Pre-install a file-backed handler on the root logger so FastMCP's
+    # ``configure_logging`` (which uses basicConfig and is a no-op once handlers
+    # exist) keeps its framework logs on the log file instead of stderr.
+    _log.configure_python_logging()
+
     server = FastMCP(
         "xonsh",
         instructions=(
