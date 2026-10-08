@@ -63,21 +63,30 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
 def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
     """Map an execution result to labeled text content blocks.
 
-    Emitting one block per field keeps output readable and avoids a
-    monolithic JSON blob being duplicated into `structuredContent`.
+    Each block carries its field name (STDOUT, STDERR, EXIT_CODE, ...) so the
+    result stays readable to models and matches the MCP text content shape the
+    client formatters expect. Emitting blocks instead of a monolithic JSON blob
+    also avoids duplicating the result into `structuredContent`.
     """
     blocks: list[TextContent] = []
     if result["stdout"]:
-        blocks.append(TextContent(type="text", text=f"STDOUT:\n{result['stdout']}"))
+        blocks.append(TextContent(type="text", text=result["stdout"], name="STDOUT"))
     if result["stderr"]:
-        blocks.append(TextContent(type="text", text=f"STDERR:\n{result['stderr']}"))
+        blocks.append(TextContent(type="text", text=result["stderr"], name="STDERR"))
     blocks.append(
         TextContent(
             type="text",
+            name="EXIT_CODE",
+            text=str(result["exit_code"]),
+        )
+    )
+    blocks.append(
+        TextContent(
+            type="text",
+            name="METADATA",
             text=(
-                f"EXIT CODE: {result['exit_code']}\n"
                 f"CWD: {result['cwd']}\n"
-                f"DURATION: {result['duration_ms']}ms\n"
+                f"DURATION_MS: {result['duration_ms']}\n"
                 f"TIMED OUT: {result['timed_out']}\n"
                 f"STDOUT TRUNCATED: {result['stdout_truncated']}\n"
                 f"STDERR TRUNCATED: {result['stderr_truncated']}\n"
