@@ -21,8 +21,12 @@ begin
     sleep 1
     echo $notify_initialized
     sleep 1
+    # LocateAnything-3B runs on CPU here and is SLOW (~44s+ for one query),
+    # so keep stdin open long enough for the server to load the model AND
+    # finish generating before we close the pipe (EOF kills the server early).
+    echo "Waiting up to 180s for the model to load and respond (slow CPU inference)..."
     echo $request_call_locate_1
-    sleep 1 # long enough for server to block on processing request 
+    sleep 180
 end | uv run \
     --directory $HOME/repos/github/g0t4/mcp-servers/src/agents \
     -m subagents \

@@ -13,7 +13,7 @@ begin
     echo $notify_initialized
     sleep 1
     echo $request_list_tools
-    sleep 1
+    sleep 3
 end | uv run \
     --directory ~/repos/github/g0t4/mcp-servers/src/agents \
     -m subagents \
