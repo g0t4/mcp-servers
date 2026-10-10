@@ -2,6 +2,7 @@ from asyncio import CancelledError
 import asyncio
 import json
 import os
+from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 from langchain.agents import create_agent
 from rich.panel import Panel
@@ -29,6 +30,8 @@ from deepagents.backends import LocalShellBackend
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 DELEGATE_TOOL_NAME = "delegate"
+DELEGATE_STATUS_TOOL_NAME = "delegate_status"
+DELEGATE_STOP_TOOL_NAME = "delegate_stop"
 
 DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-finder"
 # TODO add descriptions of the capabilities (briefly) or just let the name indicate that?
@@ -55,11 +58,65 @@ DELEGATE_TOOL = Tool(name=DELEGATE_TOOL_NAME,
                              'recursion_limit': {
                                  'description': RECURSION_LIMIT_DESC,
                                  'type': 'integer',
+                             },
+                             'background': {
+                                 'description': 'If true, run the subagent in the background and return '
+                                                'immediately with a task_id. Use delegate_status to check '
+                                                'completion and delegate_stop to kill it.',
+                                 'type': 'boolean',
+                                 'default': False,
                              }
                          },
                          'required': ['description'],
                          'type': 'object'
                      })
+
+DELEGATE_STATUS_TOOL = Tool(
+    name=DELEGATE_STATUS_TOOL_NAME,
+    description=("Check the status of a background subagent started via delegate with background=True. "
+                 "Returns whether the agent is done, and if it is done, the agent's output (or error)."),
+    inputSchema={
+        'properties': {
+            'task_id': {
+                'description': 'The identifier returned by delegate when started in the background.',
+                'type': 'string',
+            },
+        },
+        'required': ['task_id'],
+        'type': 'object',
+    },
+)
+
+DELEGATE_STOP_TOOL = Tool(
+    name=DELEGATE_STOP_TOOL_NAME,
+    description=("Stop/kill a background subagent started via delegate with background=True. "
+                 "The agent is cancelled and removed from the registry."),
+    inputSchema={
+        'properties': {
+            'task_id': {
+                'description': 'The identifier returned by delegate when started in the background.',
+                'type': 'string',
+            },
+        },
+        'required': ['task_id'],
+        'type': 'object',
+    },
+)
+
+
+@dataclass
+class BackgroundAgent:
+    """Holds state for a subagent running in the background."""
+    task_id: str
+    agent_type: str | None
+    description: str
+    task: asyncio.Task = field(init=False, default=None)  # type: ignore[assignment]
+    done: bool = False
+    result: str | None = None
+    error: str | None = None
+
+
+_background_agents: dict[str, BackgroundAgent] = {}
 
 async def setup_agent():
     global agent, client, tools, model  # FYI need agent aside from GC issues
@@ -118,6 +175,7 @@ async def delegate_tool(
     agent_type: str | None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None,
+    background: bool = False,
 ):
     """
     Delegate to a subagent to perform a task and summarize findings.
@@ -128,6 +186,9 @@ async def delegate_tool(
         recursion_limit: Maximum tool call steps before stopping (default: 50).
         on_tool_start: Optional async callback invoked for each tool start event.
                        Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
+        background: If True, run the subagent in the background and return immediately
+                    with a task_id. Use delegate_status to check completion and
+                    delegate_stop to kill it.
     """
 
     async def _inner_delegate_tool(
@@ -325,6 +386,32 @@ async def delegate_tool(
         response_content = last_ai_content if last_ai_content else (last_message.content if last_message else "")
         return [TextContent(type="text", text=response_content)]
 
+    if background:
+        task_id = uuid4().hex
+        bg = BackgroundAgent(
+            task_id=task_id,
+            agent_type=agent_type,
+            description=description,
+        )
+        _background_agents[task_id] = bg
+
+        async def _run_background() -> None:
+            try:
+                content = await _inner_delegate_tool(description, agent_type, recursion_limit, on_tool_start)
+                bg.result = content[0].text if content else ""
+            except asyncio.CancelledError:
+                bg.error = "cancelled"
+                raise
+            except Exception as error:
+                bg.error = str(error)
+                console.print(Panel(f"BACKGROUND ERROR: {error}", style="bold red"), highlight=True)
+            finally:
+                bg.done = True
+
+        bg.task = asyncio.create_task(_run_background())
+        console.print(Panel(f"BACKGROUND STARTED: {task_id}", style="bold yellow"), highlight=True)
+        return [TextContent(type="text", text=f"Background agent started with task_id: {task_id}")]
+
     try:
         return await _inner_delegate_tool(description, agent_type, recursion_limit, on_tool_start)
     except asyncio.CancelledError:
@@ -334,6 +421,29 @@ async def delegate_tool(
     except Exception as error:
         console.print(Panel(f"ERROR: {error}", style="bold red"), highlight=True)
         raise
+
+
+async def delegate_status_tool(task_id: str) -> list[TextContent]:
+    """Check the status of a background subagent."""
+    bg = _background_agents.get(task_id)
+    if bg is None:
+        raise ValueError(f"Unknown task_id: {task_id}")
+    if not bg.done:
+        return [TextContent(type="text", text=f"Agent {task_id} is still running.")]
+    if bg.error:
+        return [TextContent(type="text", text=f"Agent {task_id} finished with error: {bg.error}")]
+    return [TextContent(type="text", text=f"Agent {task_id} is done.\n\n{bg.result or ''}")]
+
+
+async def delegate_stop_tool(task_id: str) -> list[TextContent]:
+    """Stop/kill a background subagent."""
+    bg = _background_agents.get(task_id)
+    if bg is None:
+        raise ValueError(f"Unknown task_id: {task_id}")
+    if bg.task is not None and not bg.task.done():
+        bg.task.cancel()
+    del _background_agents[task_id]
+    return [TextContent(type="text", text=f"Agent {task_id} stopped.")]
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
 #  AiITL middleware ;) SITL (supervisor in the loop) middleware

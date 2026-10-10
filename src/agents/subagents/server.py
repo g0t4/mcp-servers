@@ -45,7 +45,7 @@ def create_server() -> Server:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        tools = [DELEGATE_TOOL, SCREENCAP_TOOL, LOCATE_ANYTHING_TOOL]
+        tools = [DELEGATE_TOOL, DELEGATE_STATUS_TOOL, DELEGATE_STOP_TOOL, SCREENCAP_TOOL, LOCATE_ANYTHING_TOOL]
         if DEBUGGING:
             tools.append(COUNT_TOOL)
         return tools
@@ -71,8 +71,16 @@ def create_server() -> Server:
                 result = await asyncio.to_thread(locate_anything, **arguments)
                 return [TextContent(type="text", text=result)]
 
+            if requested_tool == DELEGATE_STATUS_TOOL_NAME:
+                task_id = arguments.get("task_id")
+                return await delegate_status_tool(task_id)
+
+            if requested_tool == DELEGATE_STOP_TOOL_NAME:
+                task_id = arguments.get("task_id")
+                return await delegate_stop_tool(task_id)
+
             if requested_tool != DELEGATE_TOOL_NAME:
-                valid_tools = [DELEGATE_TOOL.name, SCREENCAP_TOOL_NAME, LOCATE_ANYTHING_TOOL_NAME]
+                valid_tools = [DELEGATE_TOOL.name, DELEGATE_STATUS_TOOL.name, DELEGATE_STOP_TOOL.name, SCREENCAP_TOOL_NAME, LOCATE_ANYTHING_TOOL_NAME]
                 if DEBUGGING:
                     valid_tools.append(COUNT_TOOL_NAME)
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": valid_tools}))
@@ -95,7 +103,14 @@ def create_server() -> Server:
             description = arguments.get("description")
             agent_type = arguments.get("agent_type", "general")
             recursion_limit = arguments.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
-            return await delegate_tool(description, agent_type, recursion_limit, on_tool_start=on_tool_start)
+            background = arguments.get("background", False)
+            return await delegate_tool(
+                description,
+                agent_type,
+                recursion_limit,
+                on_tool_start=on_tool_start,
+                background=background,
+            )
 
         except asyncio.CancelledError:
             # TODO log unhandled cancellation? so I know that I need to push it inside the inner tool function?
