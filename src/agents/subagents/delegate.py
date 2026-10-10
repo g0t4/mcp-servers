@@ -2,6 +2,7 @@ from asyncio import CancelledError
 import asyncio
 import json
 import os
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 from langchain.agents import create_agent
@@ -32,6 +33,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 DELEGATE_TOOL_NAME = "delegate"
 DELEGATE_STATUS_TOOL_NAME = "delegate_status"
 DELEGATE_STOP_TOOL_NAME = "delegate_stop"
+UPDATE_MY_STATUS_TOOL_NAME = "update_my_status"
 
 DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-finder"
 # TODO add descriptions of the capabilities (briefly) or just let the name indicate that?
@@ -114,9 +116,13 @@ class BackgroundAgent:
     done: bool = False
     result: str | None = None
     error: str | None = None
+    status: str | None = None
 
 
 _background_agents: dict[str, BackgroundAgent] = {}
+_current_background_agent: ContextVar[BackgroundAgent | None] = ContextVar(
+    "current_background_agent", default=None
+)
 
 async def setup_agent():
     global agent, client, tools, model  # FYI need agent aside from GC issues
@@ -160,7 +166,7 @@ async def setup_agent():
     })
     mcp_tools = await client.get_tools()
     # console.print("mcp_tools", mcp_tools)
-    tools = mcp_tools  # PRN extend beyond just MCP
+    tools = mcp_tools + [update_my_status_tool]  # PRN extend beyond just MCP
 
     model = ChatLlamaServer(base_url="http://paxy.lan:8014", api_key="foo")
     agent = create_agent(
@@ -396,6 +402,7 @@ async def delegate_tool(
         _background_agents[task_id] = bg
 
         async def _run_background() -> None:
+            token = _current_background_agent.set(bg)
             try:
                 content = await _inner_delegate_tool(description, agent_type, recursion_limit, on_tool_start)
                 bg.result = content[0].text if content else ""
@@ -407,6 +414,7 @@ async def delegate_tool(
                 console.print(Panel(f"BACKGROUND ERROR: {error}", style="bold red"), highlight=True)
             finally:
                 bg.done = True
+                _current_background_agent.reset(token)
 
         bg.task = asyncio.create_task(_run_background())
         console.print(Panel(f"BACKGROUND STARTED: {task_id}", style="bold yellow"), highlight=True)
@@ -428,11 +436,12 @@ async def delegate_status_tool(task_id: str) -> list[TextContent]:
     bg = _background_agents.get(task_id)
     if bg is None:
         raise ValueError(f"Unknown task_id: {task_id}")
+    status_line = f"Status: {bg.status}" if bg.status else "Status: (none)"
     if not bg.done:
-        return [TextContent(type="text", text=f"Agent {task_id} is still running.")]
+        return [TextContent(type="text", text=f"Agent {task_id} is still running.\n{status_line}")]
     if bg.error:
-        return [TextContent(type="text", text=f"Agent {task_id} finished with error: {bg.error}")]
-    return [TextContent(type="text", text=f"Agent {task_id} is done.\n\n{bg.result or ''}")]
+        return [TextContent(type="text", text=f"Agent {task_id} finished with error: {bg.error}\n{status_line}")]
+    return [TextContent(type="text", text=f"Agent {task_id} is done.\n{status_line}\n\n{bg.result or ''}")]
 
 
 async def delegate_stop_tool(task_id: str) -> list[TextContent]:
@@ -444,6 +453,16 @@ async def delegate_stop_tool(task_id: str) -> list[TextContent]:
         bg.task.cancel()
     del _background_agents[task_id]
     return [TextContent(type="text", text=f"Agent {task_id} stopped.")]
+
+
+@tool(UPDATE_MY_STATUS_TOOL_NAME)
+async def update_my_status_tool(status: str) -> str:
+    """Update the current status message for this subagent. The master agent can read this via delegate_status. Call this to briefly summarize what you are currently doing."""
+    bg = _current_background_agent.get()
+    if bg is None:
+        return "Not running in a background subagent context; status not recorded."
+    bg.status = status
+    return f"Status updated: {status}"
 
 # (optionally add interrupt support for approvals) PRN... what if the supervisor does the approvals? IOTW... subagent asks for any sensitive tool call request and supervisor agent has to respond to approve it?
 #  AiITL middleware ;) SITL (supervisor in the loop) middleware
