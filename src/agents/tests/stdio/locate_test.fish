@@ -21,12 +21,13 @@ begin
     sleep 1
     echo $notify_initialized
     sleep 1
-    # LocateAnything-3B runs on CPU here and is SLOW (~44s+ for one query),
-    # so keep stdin open long enough for the server to load the model AND
-    # finish generating before we close the pipe (EOF kills the server early).
-    echo "Waiting up to 180s for the model to load and respond (slow CPU inference)..."
+    # LocateAnything-3B is served remotely on build21.lan (llama-server, GPU) so
+    # responses are fast (<1s). Keep stdin open a moment longer than the
+    # inference to be safe -- EOF closes the pipe and kills the server early.
+    # stderr, not stdout -- stdout is the MCP JSON-RPC transport!
+    echo "Waiting for the model to respond..." >&2
     echo $request_call_locate_1
-    sleep 180
+    sleep 5
 end | uv run \
     --directory $HOME/repos/github/g0t4/mcp-servers/src/agents \
     -m subagents \
