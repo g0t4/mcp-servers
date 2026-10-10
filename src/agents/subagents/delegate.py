@@ -92,7 +92,7 @@ async def setup_agent():
     # console.print("mcp_tools", mcp_tools)
     tools = mcp_tools  # PRN extend beyond just MCP
 
-    model = ChatLlamaServer(base_url="http://ask.lan:8012", api_key="foo")
+    model = ChatLlamaServer(base_url="http://paxy.lan:8014", api_key="foo")
     agent = create_agent(
         model,
         checkpointer=InMemorySaver(),
