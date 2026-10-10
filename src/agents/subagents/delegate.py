@@ -86,6 +86,19 @@ async def setup_agent():
                 # --    this will be a huge help in troubleshooting hung tool calls and other issues
                 "--verbose",
             ]
+        },
+        # Perception tools (screencap + locate_anything) so a vision-capable
+        # subagent model can actually SEE the screen, not just get a file path.
+        "perception": {
+            "transport": "stdio",
+            "command": "uv",
+            "args": [
+                "run",
+                "--directory",
+                os.environ["HOME"] + "/repos/github/g0t4/mcp-servers/src/agents",
+                "-m",
+                "subagents.perception_server",
+            ]
         }
     })
     mcp_tools = await client.get_tools()
