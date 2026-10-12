@@ -55,6 +55,7 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     # Preserve source order when Python prints and subprocess output are mixed,
     # and return the final subprocess's exact status instead of a traceback.
     env["PYTHONUNBUFFERED"] = "1"
+    env["COLOR_RESULTS"] = "False"
     env["XONSH_SUBPROC_CMD_RAISE_ERROR"] = "False"
     env["XONSH_SUBPROC_RAISE_ERROR"] = "False"
     return env
