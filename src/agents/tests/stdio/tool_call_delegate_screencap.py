@@ -1,4 +1,4 @@
-#!/usr/bin/env xonsh
+#!python3
 import json
 import sys
 from pathlib import Path

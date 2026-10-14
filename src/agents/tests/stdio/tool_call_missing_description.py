@@ -1,4 +1,4 @@
-#!/usr/bin/env xonsh
+#!python3
 import json
 import sys
 from pathlib import Path
@@ -13,17 +13,8 @@ request_call_delegate = json.dumps(
         "method": "tools/call",
         "params": {
             "name": "delegate",
-            "_meta": {"progressToken": "req-42-progress"},
             "arguments": {"description": "what time is it?"},
         },
-    }
-)
-
-notify_cancel = json.dumps(
-    {
-        "jsonrpc": "2.0",
-        "method": "notifications/cancelled",
-        "params": {"requestId": 2, "reason": "test cancel"},
     }
 )
 
@@ -31,8 +22,6 @@ run_subagents(
     [
         (REQUEST_INIT, 1),
         (NOTIFY_INITIALIZED, 0),
-        # Cancel before we can get a response, else the cancel is ignored.
-        (request_call_delegate, 0.5),
-        (notify_cancel, 0.5),
+        (request_call_delegate, 2),
     ]
 )

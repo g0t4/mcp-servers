@@ -1,4 +1,4 @@
-#!/usr/bin/env xonsh
+#!python3
 
 import base64
 import json
