@@ -14,10 +14,14 @@ async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
         cwd=str(tmp_path),
     )
 
-    assert result["exit_code"] == 0
-    assert result["stdout"].splitlines() == ["hello world", str(tmp_path)]
-    assert result["stderr"] == ""
-    assert result["timed_out"] is False
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
+    stdout_block = blocks[0]
+    assert stdout_block.text.splitlines() == ["hello world", str(tmp_path)]
+    assert blocks[1].text == "0"
+    metadata_lines = blocks[2].text.splitlines()
+    assert "TIMED OUT" not in "\n".join(metadata_lines)
 
 
 async def test_stdin_and_environment_changes() -> None:
@@ -27,31 +31,43 @@ async def test_stdin_and_environment_changes() -> None:
         env={"MCP_XONSH_TEST": "from env"},
     )
 
-    assert result["exit_code"] == 0
-    assert result["stdout"].splitlines() == ["from env", "from stdin"]
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
+    assert blocks[0].text.splitlines() == ["from env", "from stdin"]
+    assert blocks[1].text == "0"
 
 
 async def test_nonzero_exit_is_a_result() -> None:
     result = await execute_xonsh("bash -c 'echo bad >&2; exit 7'")
 
-    assert result["exit_code"] == 7
-    assert result["stdout"] == ""
-    assert result["stderr"] == "bad\n"
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["STDERR", "EXIT_CODE", "METADATA"]
+    assert blocks[0].text == "bad\n"
+    assert blocks[1].text == "7"
 
 
 async def test_timeout_terminates_process_group() -> None:
     result = await execute_xonsh("sleep 10", timeout_seconds=0.05)
 
-    assert result["timed_out"] is True
-    assert result["exit_code"] != 0
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["EXIT_CODE", "METADATA"]
+    assert blocks[0].text != "0"
+    metadata = dict(line.split(": ", 1) for line in blocks[1].text.splitlines())
+    assert metadata["TIMED OUT"] == "True"
 
 
 async def test_output_is_truncated_with_original_size() -> None:
     result = await execute_xonsh("print('abcdefghij', end='')", max_output_bytes=4)
 
-    assert result["stdout"] == "abcd"
-    assert result["stdout_truncated"] is True
-    assert result["stdout_bytes"] == 10
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
+    assert blocks[0].text == "abcd"
+    metadata = dict(line.split(": ", 1) for line in blocks[2].text.splitlines())
+    assert metadata["STDOUT TRUNCATED"] == "True"
 
 
 async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
@@ -62,7 +78,10 @@ async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
 
     result = await execute_xonsh("print('clean')", env={"HOME": str(fake_home)})
 
-    assert result["stdout"] == "clean\n"
+    assert result.isError is False
+    blocks = result.content
+    assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
+    assert blocks[0].text == "clean\n"
 
 
 async def test_validates_arguments() -> None:
