@@ -21,7 +21,7 @@ from subagents.screencap import SCREENCAP_TOOL, SCREENCAP_TOOL_NAME, screencap
 from subagents.locate.tool import LOCATE_ANYTHING_TOOL, LOCATE_ANYTHING_TOOL_NAME, locate_anything
 from subagents.mcp_logging import LogContext
 
-_log = LogContext("agent")
+_log = LogContext("subagents")
 console = _log.console
 
 DEBUGGING = False
