@@ -15,9 +15,14 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.types import Image
 
 from subagents.locate.worker import locate_anything_infer
+from subagents.mcp_logging import LogContext
+
+_log = LogContext("subagents")
+console = _log.console
+
+DEBUGGING = False
 
 mcp = FastMCP("perception")
-
 
 @mcp.tool()
 async def screencap(description: str = "") -> Image:
@@ -58,6 +63,7 @@ def locate_anything(question: str, image_path: str) -> str:
 
 
 def main() -> None:
+    _log.configure_python_logging()
     mcp.run(transport="stdio")
 
 
