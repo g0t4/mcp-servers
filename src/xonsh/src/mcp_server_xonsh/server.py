@@ -84,12 +84,15 @@ def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
     metadata = [
         f"CWD: {result['cwd']}",
         f"DURATION_MS: {result['duration_ms']}",
-        f"TIMED OUT: {result['timed_out']}",
-        f"STDOUT TRUNCATED: {result['stdout_truncated']}",
-        f"STDERR TRUNCATED: {result['stderr_truncated']}",
         f"STDOUT BYTES: {result['stdout_bytes']}",
         f"STDERR BYTES: {result['stderr_bytes']}",
     ]
+    if result['timed_out'] == True:
+        metadata.append(f"TIMED OUT: {result['timed_out']}")
+    if result['stdout_truncated'] == True:
+        metadata.append(f"STDOUT TRUNCATED: {result['stdout_truncated']}")
+    if result['stderr_truncated'] == True:
+        metadata.append(f"STDERR TRUNCATED: {result['stderr_truncated']}")
     blocks.append(
         TextContent(
             type="text",
