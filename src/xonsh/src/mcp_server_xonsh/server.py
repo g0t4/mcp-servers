@@ -137,11 +137,13 @@ async def execute_xonsh(
         "timed_out": timed_out,
         "stdout_truncated": stdout_truncated,
         "stderr_truncated": stderr_truncated,
-        "stdout_bytes": stdout_bytes,
-        "stderr_bytes": stderr_bytes,
     }
     if not cwd_was_explicit:
         structured["cwd"] = str(resolved_cwd)
+    if stdout_truncated:
+        structured["stdout_bytes"] = stdout_bytes
+    if stderr_truncated:
+        structured["stderr_bytes"] = stderr_bytes
     return CallToolResult(content=[], structuredContent=structured, isError=is_error)
 
 

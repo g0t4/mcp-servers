@@ -70,6 +70,7 @@ async def test_output_is_truncated_with_original_size() -> None:
     assert s["stdout"] == "abcd"
     assert s["stdout_truncated"] is True
     assert s["stdout_bytes"] == 10
+    assert "stderr_bytes" not in s
 
 
 async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
