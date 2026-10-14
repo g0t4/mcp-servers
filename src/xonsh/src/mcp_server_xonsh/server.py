@@ -81,19 +81,20 @@ def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
             text=str(result["exit_code"]),
         )
     )
+    metadata = [
+        f"CWD: {result['cwd']}",
+        f"DURATION_MS: {result['duration_ms']}",
+        f"TIMED OUT: {result['timed_out']}",
+        f"STDOUT TRUNCATED: {result['stdout_truncated']}",
+        f"STDERR TRUNCATED: {result['stderr_truncated']}",
+        f"STDOUT BYTES: {result['stdout_bytes']}",
+        f"STDERR BYTES: {result['stderr_bytes']}",
+    ]
     blocks.append(
         TextContent(
             type="text",
             name="METADATA",
-            text=(
-                f"CWD: {result['cwd']}\n"
-                f"DURATION_MS: {result['duration_ms']}\n"
-                f"TIMED OUT: {result['timed_out']}\n"
-                f"STDOUT TRUNCATED: {result['stdout_truncated']}\n"
-                f"STDERR TRUNCATED: {result['stderr_truncated']}\n"
-                f"STDOUT BYTES: {result['stdout_bytes']}\n"
-                f"STDERR BYTES: {result['stderr_bytes']}"
-            ),
+            text="\n".join(metadata),
         )
     )
     return blocks
