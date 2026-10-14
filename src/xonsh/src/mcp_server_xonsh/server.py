@@ -73,18 +73,16 @@ def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
         blocks.append(TextContent(type="text", text=result["stdout"], name="STDOUT"))
     if result["stderr"]:
         blocks.append(TextContent(type="text", text=result["stderr"], name="STDERR"))
-    blocks.append(
-        TextContent(
-            type="text",
-            name="EXIT_CODE",
-            text=str(result["exit_code"]),
-        )
-    )
+    blocks.append(TextContent(
+        type="text",
+        name="EXIT_CODE",
+        text=str(result["exit_code"]),
+    ))
     metadata = [
         f"CWD: {result['cwd']}",
         f"DURATION_MS: {result['duration_ms']}",
         #
-        # I don't think we need these... not sure though... 
+        # I don't think we need these... not sure though...
         #  I suppose the client might decide not to give it back to the model if so... but then I'd really want that to be its own line item instead of need to parse METADATA for this
         # f"STDOUT BYTES: {result['stdout_bytes']}",
         # f"STDERR BYTES: {result['stderr_bytes']}",
@@ -95,13 +93,11 @@ def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
         metadata.append(f"STDOUT TRUNCATED: {result['stdout_truncated']}")
     if result['stderr_truncated'] == True:
         metadata.append(f"STDERR TRUNCATED: {result['stderr_truncated']}")
-    blocks.append(
-        TextContent(
-            type="text",
-            name="METADATA",
-            text="\n".join(metadata),
-        )
-    )
+    blocks.append(TextContent(
+        type="text",
+        name="METADATA",
+        text="\n".join(metadata),
+    ))
     return blocks
 
 
@@ -119,16 +115,12 @@ async def execute_xonsh(
     if not code.strip():
         raise ValueError("code must not be empty")
     if not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS:
-        raise ValueError(
-            f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}"
-        )
+        raise ValueError(f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}")
 
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
     code_preview = code if len(code) <= 200 else code[:200] + "..."
-    console.print(
-        f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
-        f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]"
-    )
+    console.print(f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
+                  f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]")
     console.print(f"  [dim]{code_preview}[/]")
     started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
@@ -167,22 +159,16 @@ async def execute_xonsh(
                 pass
             stdout, stderr = await process.communicate()
 
-    stdout_text, stdout_truncated, stdout_bytes = _truncate(
-        stdout, max_output_bytes
-    )
-    stderr_text, stderr_truncated, stderr_bytes = _truncate(
-        stderr, max_output_bytes
-    )
+    stdout_text, stdout_truncated, stdout_bytes = _truncate(stdout, max_output_bytes)
+    stderr_text, stderr_truncated, stderr_bytes = _truncate(stderr, max_output_bytes)
     duration_ms = round((time.monotonic() - started) * 1000)
-    console.print(
-        f"  [dim]exit[/] [cyan]{process.returncode}[/] "
-        f"[dim]duration_ms={duration_ms}[/] "
-        f"[dim]timed_out={timed_out}[/] "
-        f"[dim]stdout_truncated={stdout_truncated}[/] "
-        f"[dim]stderr_truncated={stderr_truncated}[/] "
-        f"[dim]stdout_bytes={stdout_bytes}[/] "
-        f"[dim]stderr_bytes={stderr_bytes}[/]"
-    )
+    console.print(f"  [dim]exit[/] [cyan]{process.returncode}[/] "
+                  f"[dim]duration_ms={duration_ms}[/] "
+                  f"[dim]timed_out={timed_out}[/] "
+                  f"[dim]stdout_truncated={stdout_truncated}[/] "
+                  f"[dim]stderr_truncated={stderr_truncated}[/] "
+                  f"[dim]stdout_bytes={stdout_bytes}[/] "
+                  f"[dim]stderr_bytes={stderr_bytes}[/]")
     return {
         "exit_code": process.returncode,
         "stdout": stdout_text,
@@ -205,21 +191,17 @@ def create_server(workdir: str | None = None) -> FastMCP:
 
     server = FastMCP(
         "xonsh",
-        instructions=(
-            "Execute commands and Python through Xonsh. Prefer concise native command "
-            "syntax for simple subprocesses and ordinary Python for data processing, "
-            "branching, and reusable logic. Each call is isolated and does not load rc files."
-        ),
+        instructions=("Execute commands and Python through Xonsh. Prefer concise native command "
+                      "syntax for simple subprocesses and ordinary Python for data processing, "
+                      "branching, and reusable logic. Each call is isolated and does not load rc files."),
     )
 
     @server.tool(
         name="run_xonsh",
-        description=(
-            "Run Xonsh source in a fresh process. Xonsh accepts shell-like commands and "
-            "ordinary Python in the same program. Returns structured stdout, stderr, exit "
-            "status, timing, timeout, and truncation metadata. This tool can modify the "
-            "filesystem and invoke arbitrary programs with the server's permissions."
-        ),
+        description=("Run Xonsh source in a fresh process. Xonsh accepts shell-like commands and "
+                     "ordinary Python in the same program. Returns structured stdout, stderr, exit "
+                     "status, timing, timeout, and truncation metadata. This tool can modify the "
+                     "filesystem and invoke arbitrary programs with the server's permissions."),
     )
     async def run_xonsh(
         code: str,
@@ -247,9 +229,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="MCP server exposing a deterministic Xonsh execution primitive"
-    )
+    parser = argparse.ArgumentParser(description="MCP server exposing a deterministic Xonsh execution primitive")
     parser.add_argument(
         "--transport",
         choices=("stdio", "streamable-http"),
@@ -258,10 +238,8 @@ def main() -> None:
     parser.add_argument(
         "--workdir",
         default=os.environ.get("MCP_XONSH_WORKDIR"),
-        help=(
-            "Default working directory for run_xonsh when no cwd is provided. "
-            "Falls back to the MCP_XONSH_WORKDIR environment variable."
-        ),
+        help=("Default working directory for run_xonsh when no cwd is provided. "
+              "Falls back to the MCP_XONSH_WORKDIR environment variable."),
     )
     args = parser.parse_args()
     create_server(workdir=args.workdir).run(transport=args.transport)
