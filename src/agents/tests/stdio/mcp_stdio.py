@@ -57,7 +57,9 @@ def run_subagents(messages):
 
     def _drain_stdout():
         for line in proc.stdout:
-            lines.append(line)
+            # print(line) # print w/o jq
+            pipe_to_jq(line)
+            lines.append(line) # TODO do we need to keep for assertions in some cases?
 
     reader = threading.Thread(target=_drain_stdout, daemon=True)
     reader.start()
