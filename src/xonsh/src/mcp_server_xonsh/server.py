@@ -25,6 +25,7 @@ def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
     original_bytes = len(data)
     truncated = original_bytes > limit
     if truncated:
+        # TODO? don't we need decode here too? perhaps decode first then limit after?
         data = data[:limit]
     return data.decode("utf-8", errors="replace"), truncated, original_bytes
 
@@ -54,7 +55,7 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     # Preserve source order when Python prints and subprocess output are mixed,
     # and return the final subprocess's exact status instead of a traceback.
     env["PYTHONUNBUFFERED"] = "1"
-    env["COLOR_RESULTS"] = "False"
+    env["COLOR_RESULTS"] = "False" # https://xon.sh/envvars.html#COLOR_RESULTS
     env["XONSH_SUBPROC_CMD_RAISE_ERROR"] = "False"
     env["XONSH_SUBPROC_RAISE_ERROR"] = "False"
     return env
@@ -167,8 +168,9 @@ async def execute_xonsh(
                   f"[dim]timed_out={timed_out}[/] "
                   f"[dim]stdout_truncated={stdout_truncated}[/] "
                   f"[dim]stderr_truncated={stderr_truncated}[/] "
-                  f"[dim]stdout_bytes={stdout_bytes}[/] "
-                  f"[dim]stderr_bytes={stderr_bytes}[/]")
+                  # f"[dim]stdout_bytes={stdout_bytes}[/] "
+                  # f"[dim]stderr_bytes={stderr_bytes}[/]"
+                  )
     return {
         "exit_code": process.returncode,
         "stdout": stdout_text,
