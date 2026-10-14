@@ -1,4 +1,4 @@
-"""Shared helper for driving the subagents MCP server over stdio in tests.
+"""Shared helper for driving the MCP server over stdio in tests.
 
 Each test script sends a sequence of newline-delimited JSON-RPC messages to
 ``uv run -m subagents`` (the MCP stdio server), then pipes the server's
@@ -11,7 +11,7 @@ import threading
 import time
 from pathlib import Path
 
-SUBAGENTS_DIR = Path.home() / "repos/github/g0t4/mcp-servers/src/agents"
+MCP_XONSH_DIR = Path.home() / "repos/github/g0t4/mcp-servers/src/xonsh"
 
 # The MCP stdio server uses newline-delimited JSON-RPC, so each request and
 # response occupies exactly one line.
@@ -43,7 +43,7 @@ def run_subagents(messages):
     Server stderr is left inherited so it surfaces on the terminal, exactly as
     it did in the fish tests (stdout is reserved for the JSON-RPC transport).
     """
-    cmd = ["uv", "run", "--directory", str(SUBAGENTS_DIR), "-m", "subagents"]
+    cmd = ["uv", "run", "--directory", str(MCP_XONSH_DIR), "-m", "mcp_server_xonsh"]
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE,
