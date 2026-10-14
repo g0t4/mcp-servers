@@ -100,6 +100,24 @@ def create_server() -> Server:
                         message=message,
                     )
 
+            # Build the on_background_done callback that sends a progress
+            # notification when a background subagent finishes. We capture the
+            # session, progress_token, and request_id so the notification can be
+            # sent after the tool call has already returned.
+            async def on_background_done(result: str | None, error: str | None) -> None:
+                if progress_token is not None:
+                    if error is not None:
+                        message = f"Background agent finished with error: {error}"
+                    else:
+                        message = "Background agent completed"
+                    await ctx.session.send_progress_notification(
+                        progress_token=progress_token,
+                        progress=1,
+                        total=1,
+                        message=message,
+                        related_request_id=str(ctx.request_id),
+                    )
+
             description = arguments.get("description")
             agent_type = arguments.get("agent_type", "general")
             recursion_limit = arguments.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
@@ -110,6 +128,7 @@ def create_server() -> Server:
                 recursion_limit,
                 on_tool_start=on_tool_start,
                 background=background,
+                on_background_done=on_background_done,
             )
 
         except asyncio.CancelledError:

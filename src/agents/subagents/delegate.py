@@ -182,6 +182,7 @@ async def delegate_tool(
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None,
     background: bool = False,
+    on_background_done: Callable[[str | None, str | None], Awaitable[None]] | None = None,
 ):
     """
     Delegate to a subagent to perform a task and summarize findings.
@@ -192,6 +193,8 @@ async def delegate_tool(
         recursion_limit: Maximum tool call steps before stopping (default: 200).
         on_tool_start: Optional async callback invoked for each tool start event.
                        Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
+        on_background_done: Optional async callback invoked when a background subagent
+                            completes. Signature: (result: str | None, error: str | None) -> None
         background: If True, run the subagent in the background and return immediately
                     with a task_id. Use delegate_status to check completion and
                     delegate_stop to kill it.
@@ -414,6 +417,11 @@ async def delegate_tool(
                 console.print(Panel(f"BACKGROUND ERROR: {error}", style="bold red"), highlight=True)
             finally:
                 bg.done = True
+                if on_background_done is not None:
+                    try:
+                        await on_background_done(bg.result, bg.error)
+                    except Exception:
+                        pass  # best effort, don't break background task on callback errors
                 _current_background_agent.reset(token)
 
         bg.task = asyncio.create_task(_run_background())
