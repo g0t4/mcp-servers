@@ -39,11 +39,11 @@ DELEGATE_TYPES = "assistant, web-researcher, command-runner, file-finder, test-f
 # TODO add descriptions of the capabilities (briefly) or just let the name indicate that?
 # TODO any desire to restrict tools for subagents so they cannot be used for other purposes? for now I will give out the same tools until it causes issues.
 
-DEFAULT_RECURSION_LIMIT = 50
+DEFAULT_RECURSION_LIMIT = 200
 
 RECURSION_LIMIT_DESC = ("LangChain's max messages for the subagent before stopping. Each subagent tool call "
                         "produces 2 messages (input + output). Leave unset unless the task needs more or "
-                        "fewer than the default (50).")
+                        "fewer than the default (200).")
 
 DELEGATE_TOOL = Tool(name=DELEGATE_TOOL_NAME,
                      description="Delegate to a subagent to perform relevent tasks and summarize findings.",
@@ -189,7 +189,7 @@ async def delegate_tool(
     Args:
         description: The task description to delegate.
         agent_type: Which subagent profile to use.
-        recursion_limit: Maximum tool call steps before stopping (default: 50).
+        recursion_limit: Maximum tool call steps before stopping (default: 200).
         on_tool_start: Optional async callback invoked for each tool start event.
                        Signature: (tool_name: str, tool_args: dict, tool_start_count: int) -> None
         background: If True, run the subagent in the background and return immediately
