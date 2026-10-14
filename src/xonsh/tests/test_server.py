@@ -20,7 +20,7 @@ async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
     assert s["exit_code"] == 0
     assert s["stdout"].splitlines() == ["hello world", str(tmp_path)]
     assert s["stderr"] == ""
-    assert s["timed_out"] is False
+    assert "timed_out" not in s
     assert "cwd" not in s
 
 

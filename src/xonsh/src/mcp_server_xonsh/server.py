@@ -140,10 +140,11 @@ async def execute_xonsh(
         "stdout": stdout_text,
         "stderr": stderr_text,
         "duration_ms": duration_ms,
-        "timed_out": timed_out,
     }
     if not cwd_was_explicit:
         structured["cwd"] = str(resolved_cwd)
+    if timed_out:
+        structured["timed_out"] = True
     if stdout_truncated:
         structured["stdout_truncated"] = True
         structured["stdout_bytes"] = stdout_bytes
