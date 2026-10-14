@@ -84,8 +84,11 @@ def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
     metadata = [
         f"CWD: {result['cwd']}",
         f"DURATION_MS: {result['duration_ms']}",
-        f"STDOUT BYTES: {result['stdout_bytes']}",
-        f"STDERR BYTES: {result['stderr_bytes']}",
+        #
+        # I don't think we need these... not sure though... 
+        #  I suppose the client might decide not to give it back to the model if so... but then I'd really want that to be its own line item instead of need to parse METADATA for this
+        # f"STDOUT BYTES: {result['stdout_bytes']}",
+        # f"STDERR BYTES: {result['stderr_bytes']}",
     ]
     if result['timed_out'] == True:
         metadata.append(f"TIMED OUT: {result['timed_out']}")
