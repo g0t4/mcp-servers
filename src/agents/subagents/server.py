@@ -105,11 +105,12 @@ def create_server() -> Server:
             # session, progress_token, and request_id so the notification can be
             # sent after the tool call has already returned.
             async def on_background_done(result: str | None, error: str | None) -> None:
+                # TODO? perhaps I should just make up my own notification so I have a schema beyond "message"
                 if progress_token is not None:
                     if error is not None:
-                        message = f"Background agent finished with error: {error}"
+                        message = f"[FAILED] Background agent finished with error: {error}"
                     else:
-                        message = "Background agent completed"
+                        message = "[DONE] Background agent completed"
                     await ctx.session.send_progress_notification(
                         progress_token=progress_token,
                         progress=1,
