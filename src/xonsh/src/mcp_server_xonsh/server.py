@@ -14,9 +14,8 @@ from mcp.types import CallToolResult, TextContent
 from mcp_server_xonsh.mcp_logging import LogContext
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
-DEFAULT_MAX_OUTPUT_BYTES = 1_000_000
+DEFAULT_MAX_OUTPUT_BYTES = 131072  # my biggest code files are 64KB roughly ... so 128 is PLENTY for most agent tasks that are reasonable in one go
 MAX_TIMEOUT_SECONDS = 600.0
-MAX_OUTPUT_BYTES = 10_000_000
 
 _log = LogContext("xonsh")
 console = _log.console
@@ -122,10 +121,6 @@ async def execute_xonsh(
     if not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS:
         raise ValueError(
             f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}"
-        )
-    if not 1 <= max_output_bytes <= MAX_OUTPUT_BYTES:
-        raise ValueError(
-            f"max_output_bytes must be between 1 and {MAX_OUTPUT_BYTES}"
         )
 
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
