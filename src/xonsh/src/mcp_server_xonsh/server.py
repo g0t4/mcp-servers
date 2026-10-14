@@ -7,8 +7,6 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Any
-
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 from mcp_server_xonsh.mcp_logging import LogContext
@@ -61,47 +59,6 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     return env
 
 
-def _result_to_content(result: dict[str, Any]) -> list[TextContent]:
-    """Map an execution result to labeled text content blocks.
-
-    Each block carries its field name (STDOUT, STDERR, EXIT_CODE, ...) so the
-    result stays readable to models and matches the MCP text content shape the
-    client formatters expect. Emitting blocks instead of a monolithic JSON blob
-    also avoids duplicating the result into `structuredContent`.
-    """
-    blocks: list[TextContent] = []
-    if result["stdout"]:
-        blocks.append(TextContent(type="text", text=result["stdout"], name="STDOUT"))
-    if result["stderr"]:
-        blocks.append(TextContent(type="text", text=result["stderr"], name="STDERR"))
-    blocks.append(TextContent(
-        type="text",
-        name="EXIT_CODE",
-        text=str(result["exit_code"]),
-    ))
-    metadata = [
-        f"CWD: {result['cwd']}",
-        f"DURATION_MS: {result['duration_ms']}",
-        #
-        # I don't think we need these... not sure though...
-        #  I suppose the client might decide not to give it back to the model if so... but then I'd really want that to be its own line item instead of need to parse METADATA for this
-        # f"STDOUT BYTES: {result['stdout_bytes']}",
-        # f"STDERR BYTES: {result['stderr_bytes']}",
-    ]
-    if result['timed_out'] == True:
-        metadata.append(f"TIMED OUT: {result['timed_out']}")
-    if result['stdout_truncated'] == True:
-        metadata.append(f"STDOUT TRUNCATED: {result['stdout_truncated']}")
-    if result['stderr_truncated'] == True:
-        metadata.append(f"STDERR TRUNCATED: {result['stderr_truncated']}")
-    blocks.append(TextContent(
-        type="text",
-        name="METADATA",
-        text="\n".join(metadata),
-    ))
-    return blocks
-
-
 async def execute_xonsh(
     code: str,
     *,
@@ -111,7 +68,7 @@ async def execute_xonsh(
     env: dict[str, str | None] | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
-) -> dict[str, Any]:
+) -> CallToolResult:
     """Execute code in a fresh, non-interactive Xonsh process."""
     if not code.strip():
         raise ValueError("code must not be empty")
@@ -171,18 +128,32 @@ async def execute_xonsh(
                   # f"[dim]stdout_bytes={stdout_bytes}[/] "
                   # f"[dim]stderr_bytes={stderr_bytes}[/]"
                   )
-    return {
-        "exit_code": process.returncode,
-        "stdout": stdout_text,
-        "stderr": stderr_text,
-        "cwd": str(resolved_cwd),
-        "duration_ms": duration_ms,
-        "timed_out": timed_out,
-        "stdout_truncated": stdout_truncated,
-        "stderr_truncated": stderr_truncated,
-        "stdout_bytes": stdout_bytes,
-        "stderr_bytes": stderr_bytes,
-    }
+    blocks: list[TextContent] = []
+    if stdout_text:
+        blocks.append(TextContent(type="text", text=stdout_text, name="STDOUT"))
+    if stderr_text:
+        blocks.append(TextContent(type="text", text=stderr_text, name="STDERR"))
+    blocks.append(TextContent(
+        type="text",
+        name="EXIT_CODE",
+        text=str(process.returncode),
+    ))
+    metadata = [
+        f"CWD: {resolved_cwd}",
+        f"DURATION_MS: {duration_ms}",
+    ]
+    if timed_out:
+        metadata.append(f"TIMED OUT: {timed_out}")
+    if stdout_truncated:
+        metadata.append(f"STDOUT TRUNCATED: {stdout_truncated}")
+    if stderr_truncated:
+        metadata.append(f"STDERR TRUNCATED: {stderr_truncated}")
+    blocks.append(TextContent(
+        type="text",
+        name="METADATA",
+        text="\n".join(metadata),
+    ))
+    return CallToolResult(content=blocks, isError=False)
 
 
 def create_server(workdir: str | None = None) -> FastMCP:
@@ -213,7 +184,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     ) -> CallToolResult:
-        result = await execute_xonsh(
+        return await execute_xonsh(
             code,
             cwd=cwd,
             default_cwd=workdir,
@@ -221,10 +192,6 @@ def create_server(workdir: str | None = None) -> FastMCP:
             env=env,
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
-        )
-        return CallToolResult(
-            content=_result_to_content(result),
-            isError=False,
         )
 
     return server
