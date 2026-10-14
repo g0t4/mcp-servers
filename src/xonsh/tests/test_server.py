@@ -6,15 +6,6 @@ from pathlib import Path
 import pytest
 
 from mcp_server_xonsh.server import create_server, execute_xonsh
-from mcp.types import CallToolResult, TextContent
-
-
-def content(result: CallToolResult, label: str) -> TextContent:
-    """Look up a labeled content block by name."""
-    for block in result.content:
-        if block.name == label:
-            return block
-    raise AssertionError(f"no content block named {label!r} in {result}")
 
 
 async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
@@ -24,11 +15,13 @@ async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
     )
 
     assert result.isError is False
-    assert content(result, "STDOUT").text.splitlines() == ["hello world", str(tmp_path)]
-    assert content(result, "EXIT_CODE").text == "0"
-    metadata_lines = content(result, "METADATA").text.splitlines()
-    assert "TIMED OUT" not in "\n".join(metadata_lines)
-    assert not any(line.startswith("CWD:") for line in metadata_lines)
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"].splitlines() == ["hello world", str(tmp_path)]
+    assert s["stderr"] == ""
+    assert s["timed_out"] is False
+    assert "cwd" not in s
 
 
 async def test_stdin_and_environment_changes() -> None:
@@ -39,39 +32,44 @@ async def test_stdin_and_environment_changes() -> None:
     )
 
     assert result.isError is False
-    assert content(result, "STDOUT").text.splitlines() == ["from env", "from stdin"]
-    assert content(result, "EXIT_CODE").text == "0"
-    metadata_lines = content(result, "METADATA").text.splitlines()
-    assert any(line.startswith("CWD:") for line in metadata_lines)
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"].splitlines() == ["from env", "from stdin"]
+    assert "cwd" in s
 
 
 async def test_nonzero_exit_is_a_result() -> None:
     result = await execute_xonsh("bash -c 'echo bad >&2; exit 7'")
 
     assert result.isError is True
-    assert content(result, "STDERR").text == "bad\n"
-    assert content(result, "EXIT_CODE").text == "7"
-    metadata_lines = content(result, "METADATA").text.splitlines()
-    assert any(line.startswith("CWD:") for line in metadata_lines)
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 7
+    assert s["stdout"] == ""
+    assert s["stderr"] == "bad\n"
+    assert "cwd" in s
 
 
 async def test_timeout_terminates_process_group() -> None:
     result = await execute_xonsh("sleep 10", timeout_seconds=0.05)
 
     assert result.isError is True
-    assert content(result, "EXIT_CODE").text != "0"
-    metadata = dict(line.split(": ", 1) for line in content(result, "METADATA").text.splitlines())
-    assert metadata["TIMED OUT"] == "True"
+    s = result.structuredContent
+    assert s is not None
+    assert s["timed_out"] is True
+    assert s["exit_code"] != 0
 
 
 async def test_output_is_truncated_with_original_size() -> None:
     result = await execute_xonsh("print('abcdefghij', end='')", max_output_bytes=4)
 
     assert result.isError is False
-    assert content(result, "STDOUT").text == "abcd"
-    metadata = dict(line.split(": ", 1) for line in content(result, "METADATA").text.splitlines())
-    assert metadata["STDOUT TRUNCATED"] == "True"
-    assert metadata["STDOUT BYTES"] == "10"
+    s = result.structuredContent
+    assert s is not None
+    assert s["stdout"] == "abcd"
+    assert s["stdout_truncated"] is True
+    assert s["stdout_bytes"] == 10
 
 
 async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
@@ -83,9 +81,10 @@ async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
     result = await execute_xonsh("print('clean')", env={"HOME": str(fake_home)})
 
     assert result.isError is False
-    assert content(result, "STDOUT").text == "clean\n"
-    metadata_lines = content(result, "METADATA").text.splitlines()
-    assert any(line.startswith("CWD:") for line in metadata_lines)
+    s = result.structuredContent
+    assert s is not None
+    assert s["stdout"] == "clean\n"
+    assert "cwd" in s
 
 
 async def test_validates_arguments() -> None:

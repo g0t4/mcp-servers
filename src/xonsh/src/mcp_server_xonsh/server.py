@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
 from mcp_server_xonsh.mcp_logging import LogContext
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -128,36 +128,21 @@ async def execute_xonsh(
                   # f"[dim]stdout_bytes={stdout_bytes}[/] "
                   # f"[dim]stderr_bytes={stderr_bytes}[/]"
                   )
-    blocks: list[TextContent] = []
-    if stdout_text:
-        blocks.append(TextContent(type="text", text=stdout_text, name="STDOUT"))
-    if stderr_text:
-        blocks.append(TextContent(type="text", text=stderr_text, name="STDERR"))
-    blocks.append(TextContent(
-        type="text",
-        name="EXIT_CODE",
-        text=str(process.returncode),
-    ))
-    metadata = [
-        f"DURATION_MS: {duration_ms}",
-    ]
-    if not cwd_was_explicit:
-        metadata.append(f"CWD: {resolved_cwd}")
-    if timed_out:
-        metadata.append(f"TIMED OUT: {timed_out}")
-    if stdout_truncated:
-        metadata.append(f"STDOUT TRUNCATED: {stdout_truncated}")
-        metadata.append(f"STDOUT BYTES: {stdout_bytes}")
-    if stderr_truncated:
-        metadata.append(f"STDERR TRUNCATED: {stderr_truncated}")
-        metadata.append(f"STDERR BYTES: {stderr_bytes}")
-    blocks.append(TextContent(
-        type="text",
-        name="METADATA",
-        text="\n".join(metadata),
-    ))
     is_error = process.returncode != 0 or timed_out
-    return CallToolResult(content=blocks, isError=is_error)
+    structured = {
+        "exit_code": process.returncode,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+        "duration_ms": duration_ms,
+        "timed_out": timed_out,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+    }
+    if not cwd_was_explicit:
+        structured["cwd"] = str(resolved_cwd)
+    return CallToolResult(content=[], structuredContent=structured, isError=is_error)
 
 
 def create_server(workdir: str | None = None) -> FastMCP:
