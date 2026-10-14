@@ -11,7 +11,7 @@ from typing import Callable, Awaitable, Any
 
 from subagents.mcp_logging import LogContext
 
-_log = LogContext("agent")
+_log = LogContext("subagents")
 console = _log.console
 _traces_dir = _log.traces_dir
 
