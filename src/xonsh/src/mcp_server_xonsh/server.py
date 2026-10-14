@@ -23,7 +23,6 @@ def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
     original_bytes = len(data)
     truncated = original_bytes > limit
     if truncated:
-        # TODO? don't we need decode here too? perhaps decode first then limit after?
         data = data[:limit]
     return data.decode("utf-8", errors="replace"), truncated, original_bytes
 
