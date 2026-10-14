@@ -71,6 +71,7 @@ async def test_output_is_truncated_with_original_size() -> None:
     assert content(result, "STDOUT").text == "abcd"
     metadata = dict(line.split(": ", 1) for line in content(result, "METADATA").text.splitlines())
     assert metadata["STDOUT TRUNCATED"] == "True"
+    assert metadata["STDOUT BYTES"] == "10"
 
 
 async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:

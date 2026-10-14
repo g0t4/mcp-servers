@@ -147,8 +147,10 @@ async def execute_xonsh(
         metadata.append(f"TIMED OUT: {timed_out}")
     if stdout_truncated:
         metadata.append(f"STDOUT TRUNCATED: {stdout_truncated}")
+        metadata.append(f"STDOUT BYTES: {stdout_bytes}")
     if stderr_truncated:
         metadata.append(f"STDERR TRUNCATED: {stderr_truncated}")
+        metadata.append(f"STDERR BYTES: {stderr_bytes}")
     blocks.append(TextContent(
         type="text",
         name="METADATA",
