@@ -80,7 +80,6 @@ async def execute_xonsh(
         raise ValueError(f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}")
 
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
-    cwd_was_explicit = cwd is not None
     code_preview = code if len(code) <= 200 else code[:200] + "..."
     if _verbose:
         console.print(f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
@@ -139,10 +138,7 @@ async def execute_xonsh(
         "exit_code": process.returncode,
         "stdout": stdout_text,
         "stderr": stderr_text,
-        "duration_ms": duration_ms,
     }
-    if not cwd_was_explicit:
-        structured["cwd"] = str(resolved_cwd)
     if timed_out:
         structured["timed_out"] = True
     if stdout_truncated:

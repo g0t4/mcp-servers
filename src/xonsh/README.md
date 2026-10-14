@@ -54,9 +54,9 @@ Example MCP configuration:
   1 MB and allows up to 10 MB. The process is still fully drained to avoid
   deadlocks, and the result reports original byte counts and truncation.
 
-The JSON result includes `exit_code`, separate `stdout` and `stderr`, resolved
-`cwd`, elapsed milliseconds, timeout state, and output-size metadata. A nonzero
-exit is returned normally so the agent can inspect and respond to the failure.
+The JSON result includes `exit_code`, separate `stdout` and `stderr`, timeout
+state, and output-size metadata. A nonzero exit is returned normally so the
+agent can inspect and respond to the failure.
 
 This is arbitrary code execution with the MCP server process's permissions. It
 is an execution boundary, not a sandbox.

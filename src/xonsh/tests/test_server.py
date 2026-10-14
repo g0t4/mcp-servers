@@ -22,6 +22,7 @@ async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
     assert s["stderr"] == ""
     assert "timed_out" not in s
     assert "cwd" not in s
+    assert "duration_ms" not in s
 
 
 async def test_stdin_and_environment_changes() -> None:
@@ -36,7 +37,7 @@ async def test_stdin_and_environment_changes() -> None:
     assert s is not None
     assert s["exit_code"] == 0
     assert s["stdout"].splitlines() == ["from env", "from stdin"]
-    assert "cwd" in s
+    assert "cwd" not in s
 
 
 async def test_nonzero_exit_is_a_result() -> None:
@@ -48,7 +49,7 @@ async def test_nonzero_exit_is_a_result() -> None:
     assert s["exit_code"] == 7
     assert s["stdout"] == ""
     assert s["stderr"] == "bad\n"
-    assert "cwd" in s
+    assert "cwd" not in s
 
 
 async def test_timeout_terminates_process_group() -> None:
@@ -85,7 +86,7 @@ async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
     s = result.structuredContent
     assert s is not None
     assert s["stdout"] == "clean\n"
-    assert "cwd" in s
+    assert "cwd" not in s
 
 
 async def test_validates_arguments() -> None:
