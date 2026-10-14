@@ -1,6 +1,7 @@
 import rich
 import asyncio
 import os
+from typing import Any
 from pathlib import Path
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
@@ -8,6 +9,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import (
     ErrorData,
     GetPromptResult,
+    Notification,
     Prompt,
     PromptArgument,
     TextContent,
@@ -25,6 +27,10 @@ _log = LogContext("subagents")
 console = _log.console
 
 DEBUGGING = False
+
+# DO NOT FOGET THE FUCKING TYPE ANNOTATION OR YOU ARE ASS RAPED
+# pydantic happily deletes shit w/o a fucking care in the world (no logging, no errors, no nothing unless the person that built the model made it strict)
+RawNotification_DeleteThisAndYouGetSurpriseAssRape = Notification[dict[str, Any], str]
 
 
 def _resolve_workdir(workdir: str | None = None) -> str | None:
@@ -97,11 +103,16 @@ def create_server() -> Server:
             ctx = server.request_context
             progress_token = ctx.meta.progressToken if ctx.meta else None
 
+            status_message_buffer = []
+            # final_notification = None # TODO use this?
+
             # Build the on_tool_start callback that sends MCP progress notifications
             async def on_tool_start(tool_name: str, tool_args: dict, tool_start_count: int) -> None:
+                message = f"Running tool: {tool_name} args={tool_args}"
+                # TODO add method to poll this buffer of messages
+                status_message_buffer.append(message)
                 if progress_token is not None:
-                    tool_args_str = str(tool_args)
-                    message = f"Running tool: {tool_name} args={tool_args_str}"
+                    # TODO arg to control opt-out or opt-in? micromanage :)
                     await ctx.session.send_progress_notification(
                         progress_token=progress_token,
                         progress=tool_start_count,
@@ -113,19 +124,32 @@ def create_server() -> Server:
             # session, progress_token, and request_id so the notification can be
             # sent after the tool call has already returned.
             async def on_background_done(result: str | None, error: str | None) -> None:
-                # TODO? perhaps I should just make up my own notification so I have a schema beyond "message"
-                if progress_token is not None:
-                    if error is not None:
-                        message = f"[FAILED] Background agent finished with error: {error}"
-                    else:
-                        message = "[DONE] Background agent completed"
-                    await ctx.session.send_progress_notification(
-                        progress_token=progress_token,
-                        progress=1,
-                        total=1,
-                        message=message,
-                        related_request_id=str(ctx.request_id),
-                    )
+                if error is not None:
+                    message = f"FAILED: Background subagent finished with error: {error}"
+                else:
+                    message = "DONE: Background subagent completed"
+
+                if result is not None:
+                    message = f"{message}\n\nRESULT: {result}"
+
+                final_notification = RawNotification_DeleteThisAndYouGetSurpriseAssRape(
+                    method="notification/background_done",
+                    params={
+                        "progressToken": progress_token,
+                        "message": message,
+                        # "related_request_id": str(ctx.request_id), # FYI I don't need this b/c I already have it in progressToken in my case => only add back if needed for some specific client issue
+                        "result": result,
+                        "error": error,
+                    },
+                )
+
+                if progress_token is None:
+                    # client side might struggle to correlate, but I bet agents will figure it out
+                    console.print("missing progress_token, responding w/ background_done anyways")
+
+                await ctx.session.send_notification(final_notification)
+
+            # console.print(msg1.model_dump()) # testing the dump w/o waiting
 
             description = arguments.get("description", "")
             agent_type = arguments.get("agent_type", "general")
