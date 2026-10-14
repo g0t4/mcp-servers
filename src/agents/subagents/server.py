@@ -19,6 +19,10 @@ from subagents.delegate import *
 from subagents.count import COUNT_TOOL, COUNT_TOOL_NAME, count
 from subagents.screencap import SCREENCAP_TOOL, SCREENCAP_TOOL_NAME, screencap
 from subagents.locate.tool import LOCATE_ANYTHING_TOOL, LOCATE_ANYTHING_TOOL_NAME, locate_anything
+from subagents.mcp_logging import LogContext
+
+_log = LogContext("agent")
+console = _log.console
 
 DEBUGGING = False
 
@@ -41,6 +45,10 @@ def create_server() -> Server:
     Returns:
         A configured Server instance with tools and prompts.
     """
+    # Pre-install a file-backed handler on the root logger so framework logs
+    # land on the log file instead of stderr.
+    _log.configure_python_logging()
+
     server = Server("subagents")
 
     @server.list_tools()

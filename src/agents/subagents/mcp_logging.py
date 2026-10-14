@@ -7,6 +7,9 @@ Writes rich-formatted logs and trace files to an XDG-compliant state dir:
 
 Falls back to ``~/.local/state/mcp-servers/`` when ``XDG_STATE_HOME`` is unset.
 
+Also routes stdlib ``logging`` (which FastMCP uses internally) to the same log
+file so framework logs don't pollute stderr.
+
 This module is intentionally self-contained so it can be copied verbatim into
 other MCP server packages (e.g. ``mcp_server_xonsh``) to keep logging logic in
 one place.
@@ -14,6 +17,7 @@ one place.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -39,6 +43,24 @@ class LogContext:
         self.traces_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = open(self.log_dir / f"{name}.log", "a")
         self.console = Console(file=self.log_file, force_terminal=True)
+
+    def configure_python_logging(self, level: int = logging.INFO) -> None:
+        """Route stdlib ``logging`` (FastMCP internals) to this log file.
+
+        FastMCP's ``configure_logging`` calls ``logging.basicConfig`` with a
+        handler bound to ``Console(stderr=True)``. ``basicConfig`` is a no-op
+        once the root logger already has handlers, so pre-installing a
+        file-backed handler here keeps MCP framework logs off stderr and on
+        disk instead.
+        """
+        root = logging.getLogger()
+        for handler in list(root.handlers):
+            root.removeHandler(handler)
+        from rich.logging import RichHandler
+
+        handler = RichHandler(console=self.console, rich_tracebacks=True)
+        root.addHandler(handler)
+        root.setLevel(level)
 
     @staticmethod
     def _state_dir() -> Path:
