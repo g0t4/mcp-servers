@@ -118,7 +118,7 @@ def create_server() -> Server:
                         related_request_id=str(ctx.request_id),
                     )
 
-            description = arguments.get("description")
+            description = arguments.get("description", "")
             agent_type = arguments.get("agent_type", "general")
             recursion_limit = arguments.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
             background = arguments.get("background", False)
