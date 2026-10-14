@@ -22,6 +22,7 @@ async def test_combines_xonsh_commands_and_python(tmp_path: Path) -> None:
     assert blocks[1].text == "0"
     metadata_lines = blocks[2].text.splitlines()
     assert "TIMED OUT" not in "\n".join(metadata_lines)
+    assert not any(line.startswith("CWD:") for line in metadata_lines)
 
 
 async def test_stdin_and_environment_changes() -> None:
@@ -36,6 +37,8 @@ async def test_stdin_and_environment_changes() -> None:
     assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
     assert blocks[0].text.splitlines() == ["from env", "from stdin"]
     assert blocks[1].text == "0"
+    metadata_lines = blocks[2].text.splitlines()
+    assert any(line.startswith("CWD:") for line in metadata_lines)
 
 
 async def test_nonzero_exit_is_a_result() -> None:
@@ -46,6 +49,8 @@ async def test_nonzero_exit_is_a_result() -> None:
     assert [b.name for b in blocks] == ["STDERR", "EXIT_CODE", "METADATA"]
     assert blocks[0].text == "bad\n"
     assert blocks[1].text == "7"
+    metadata_lines = blocks[2].text.splitlines()
+    assert any(line.startswith("CWD:") for line in metadata_lines)
 
 
 async def test_timeout_terminates_process_group() -> None:
@@ -82,6 +87,8 @@ async def test_rc_files_are_not_loaded(tmp_path: Path) -> None:
     blocks = result.content
     assert [b.name for b in blocks] == ["STDOUT", "EXIT_CODE", "METADATA"]
     assert blocks[0].text == "clean\n"
+    metadata_lines = blocks[2].text.splitlines()
+    assert any(line.startswith("CWD:") for line in metadata_lines)
 
 
 async def test_validates_arguments() -> None:
