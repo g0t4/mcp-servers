@@ -17,9 +17,10 @@ MAX_TIMEOUT_SECONDS = 600.0
 
 _log = LogContext("xonsh")
 console = _log.console
+_verbose = False
 
 
-def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
+def _truncate_and_decode(data: bytes, limit: int) -> tuple[str, bool, int]:
     original_bytes = len(data)
     truncated = original_bytes > limit
     if truncated:
@@ -28,6 +29,10 @@ def _truncate(data: bytes, limit: int) -> tuple[str, bool, int]:
 
 
 def _resolve_cwd(cwd: str | None, default_cwd: str | None = None) -> Path:
+    """Resolve the working directory.
+
+    Precedence: explicit cwd > default_cwd > server process cwd.
+    """
     path = Path(cwd or default_cwd or os.getcwd()).expanduser().resolve()
     if not path.exists():
         raise ValueError(f"cwd does not exist: {path}")
@@ -77,9 +82,10 @@ async def execute_xonsh(
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
     cwd_was_explicit = cwd is not None
     code_preview = code if len(code) <= 200 else code[:200] + "..."
-    console.print(f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
-                  f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]")
-    console.print(f"  [dim]{code_preview}[/]")
+    if _verbose:
+        console.print(f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
+                      f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]")
+        console.print(f"  [dim]{code_preview}[/]")
     started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -117,17 +123,17 @@ async def execute_xonsh(
                 pass
             stdout, stderr = await process.communicate()
 
-    stdout_text, stdout_truncated, stdout_bytes = _truncate(stdout, max_output_bytes)
-    stderr_text, stderr_truncated, stderr_bytes = _truncate(stderr, max_output_bytes)
+    stdout_text, stdout_truncated, stdout_bytes = _truncate_and_decode(stdout, max_output_bytes)
+    stderr_text, stderr_truncated, stderr_bytes = _truncate_and_decode(stderr, max_output_bytes)
     duration_ms = round((time.monotonic() - started) * 1000)
-    console.print(f"  [dim]exit[/] [cyan]{process.returncode}[/] "
-                  f"[dim]duration_ms={duration_ms}[/] "
-                  f"[dim]timed_out={timed_out}[/] "
-                  f"[dim]stdout_truncated={stdout_truncated}[/] "
-                  f"[dim]stderr_truncated={stderr_truncated}[/] "
-                  # f"[dim]stdout_bytes={stdout_bytes}[/] "
-                  # f"[dim]stderr_bytes={stderr_bytes}[/]"
-                  )
+    if _verbose:
+        console.print(f"  [dim]exit[/] [cyan]{process.returncode}[/] "
+                      f"[dim]duration_ms={duration_ms}[/] "
+                      f"[dim]timed_out={timed_out}[/] "
+                      f"[dim]stdout_truncated={stdout_truncated}[/] "
+                      f"[dim]stderr_truncated={stderr_truncated}[/] "
+                      f"[dim]stdout_bytes={stdout_bytes}[/] "
+                      f"[dim]stderr_bytes={stderr_bytes}[/]")
     is_error = process.returncode != 0 or timed_out
     structured = {
         "exit_code": process.returncode,
@@ -201,7 +207,14 @@ def main() -> None:
         help=("Default working directory for run_xonsh when no cwd is provided. "
               "Falls back to the MCP_XONSH_WORKDIR environment variable."),
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging for debugging.",
+    )
     args = parser.parse_args()
+    global _verbose
+    _verbose = args.verbose
     create_server(workdir=args.workdir).run(transport=args.transport)
 
 
