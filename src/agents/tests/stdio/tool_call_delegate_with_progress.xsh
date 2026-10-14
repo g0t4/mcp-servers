@@ -16,10 +16,12 @@ request_call_delegate = json.dumps(
             "_meta": {"progressToken": "req-42-progress"},
             "arguments": {
                 "description": (
-                    "run sleep ten times serially (not in parallel) where each "
-                    "time you add 0.25 more seconds... so sleep 0.25 to start "
-                    "then sleep 0.5 then sleep 0.75 etc - run each as a separate "
-                    "tool call, not one giant command"
+                    "Please run these tool calls serially (one at a time, not in parallel) and each in a separate tool call request:"
+                    "  `sleep 0.25`\n"
+                    "  `sleep 0.5`\n"
+                    "  `sleep 0.75`\n"
+                    "\n"
+                    "Do not combine these into one command line call, nor into parallel tool call requests."
                 )
             },
         },
