@@ -48,7 +48,7 @@ async def test_stdin_and_environment_changes() -> None:
 async def test_nonzero_exit_is_a_result() -> None:
     result = await execute_xonsh("bash -c 'echo bad >&2; exit 7'")
 
-    assert result.isError is False
+    assert result.isError is True
     assert content(result, "STDERR").text == "bad\n"
     assert content(result, "EXIT_CODE").text == "7"
     metadata_lines = content(result, "METADATA").text.splitlines()
@@ -58,7 +58,7 @@ async def test_nonzero_exit_is_a_result() -> None:
 async def test_timeout_terminates_process_group() -> None:
     result = await execute_xonsh("sleep 10", timeout_seconds=0.05)
 
-    assert result.isError is False
+    assert result.isError is True
     assert content(result, "EXIT_CODE").text != "0"
     metadata = dict(line.split(": ", 1) for line in content(result, "METADATA").text.splitlines())
     assert metadata["TIMED OUT"] == "True"

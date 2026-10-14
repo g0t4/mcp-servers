@@ -156,7 +156,8 @@ async def execute_xonsh(
         name="METADATA",
         text="\n".join(metadata),
     ))
-    return CallToolResult(content=blocks, isError=False)
+    is_error = process.returncode != 0 or timed_out
+    return CallToolResult(content=blocks, isError=is_error)
 
 
 def create_server(workdir: str | None = None) -> FastMCP:
