@@ -51,15 +51,10 @@ def run_subagents(messages):
         text=True,
     )
 
-    # Drain stdout on a background thread so a large response can't fill the
-    # pipe buffer and deadlock the server while we are sleeping.
-    lines = []
-
     def _drain_stdout():
         for line in proc.stdout:
             # print(line) # print w/o jq
             pipe_to_jq(line)
-            lines.append(line) # TODO do we need to keep for assertions in some cases?
 
     reader = threading.Thread(target=_drain_stdout, daemon=True)
     reader.start()
@@ -72,9 +67,7 @@ def run_subagents(messages):
     # EOF on stdin tells the stdio server to exit.
     proc.stdin.close()
     proc.wait()
-    reader.join()
-
-    return "".join(lines)
+    reader.join() # block once dump is all that remains
 
 
 def pipe_to_jq(stdout):
