@@ -103,21 +103,27 @@ def create_server() -> Server:
             ctx = server.request_context
             progress_token = ctx.meta.progressToken if ctx.meta else None
 
-            status_message_buffer = []
-            # final_notification = None # TODO use this?
-
             # Build the on_tool_start callback that sends MCP progress notifications
             async def on_tool_start(tool_name: str, tool_args: dict, tool_start_count: int) -> None:
-                message = f"Running tool: {tool_name} args={tool_args}"
-                # TODO add method to poll this buffer of messages
-                status_message_buffer.append(message)
-                if progress_token is not None:
-                    # TODO arg to control opt-out or opt-in? micromanage :)
-                    await ctx.session.send_progress_notification(
-                        progress_token=progress_token,
-                        progress=tool_start_count,
-                        message=message,
-                    )
+                # PRN add CLI arg to enable / disable verbosity of status?
+
+                start_notification = RawNotification_DeleteThisAndYouGetSurpriseAssRape(
+                    method="background/status",  # ? "task/status"
+                    params={
+                        "progressToken": progress_token,
+                        # FYI progressToken is for the entire, upstream subagent (delegate) tool call, not the `tool_call.id` for this tool invocation in this subagent
+                        "event": "tool_start",
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        # "count": tool_start_count, # add if useful, i.e. if notifications get out of order for some reason?
+                    },
+                )
+
+                if progress_token is None:
+                    # client side might struggle to correlate, but I bet agents will figure it out
+                    console.print("missing progress_token, responding w/ background/status anyways")
+
+                await ctx.session.send_notification(start_notification)
 
             # Build the on_background_done callback that sends a progress
             # notification when a background subagent finishes. We capture the
@@ -125,15 +131,12 @@ def create_server() -> Server:
             # sent after the tool call has already returned.
             async def on_background_done(result: str | None, error: str | None) -> None:
                 if error is not None:
-                    message = f"FAILED: Background subagent finished with error: {error}"
+                    message = f"FAILED: Background subagent failed with error: {error}"
                 else:
                     message = "DONE: Background subagent completed"
 
-                if result is not None:
-                    message = f"{message}\n\nRESULT: {result}"
-
                 final_notification = RawNotification_DeleteThisAndYouGetSurpriseAssRape(
-                    method="notifications/background_done",
+                    method="background/done",
                     params={
                         "progressToken": progress_token,
                         "message": message,
@@ -143,9 +146,15 @@ def create_server() -> Server:
                     },
                 )
 
+                # * avoid vim.NIL (due to null/None values)
+                if final_notification.params["result"] is None:
+                    del final_notification.params["result"]
+                if final_notification.params.get("error") is None:
+                    del final_notification.params["error"]
+
                 if progress_token is None:
                     # client side might struggle to correlate, but I bet agents will figure it out
-                    console.print("missing progress_token, responding w/ background_done anyways")
+                    console.print("missing progress_token, responding w/ background/done anyways")
 
                 await ctx.session.send_notification(final_notification)
 
