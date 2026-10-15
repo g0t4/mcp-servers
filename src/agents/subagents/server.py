@@ -21,6 +21,7 @@ from subagents.delegate import *
 from subagents.count import COUNT_TOOL, COUNT_TOOL_NAME, count
 from subagents.screencap import SCREENCAP_TOOL, SCREENCAP_TOOL_NAME, screencap
 from subagents.locate.tool import LOCATE_ANYTHING_TOOL, LOCATE_ANYTHING_TOOL_NAME, locate_anything
+from subagents.speak import SPEAK_TOOL, SPEAK_TOOL_NAME, speak
 from subagents.mcp_logging import LogContext
 
 _log = LogContext("subagents")
@@ -59,7 +60,7 @@ def create_server() -> Server:
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        tools = [DELEGATE_TOOL, DELEGATE_STATUS_TOOL, DELEGATE_STOP_TOOL, SCREENCAP_TOOL, LOCATE_ANYTHING_TOOL]
+        tools = [DELEGATE_TOOL, DELEGATE_STATUS_TOOL, DELEGATE_STOP_TOOL, SCREENCAP_TOOL, LOCATE_ANYTHING_TOOL, SPEAK_TOOL]
         if DEBUGGING:
             tools.append(COUNT_TOOL)
         return tools
@@ -85,6 +86,9 @@ def create_server() -> Server:
                 result = await asyncio.to_thread(locate_anything, **arguments)
                 return [TextContent(type="text", text=result)]
 
+            if requested_tool == SPEAK_TOOL_NAME:
+                return await speak(**arguments)
+
             if requested_tool == DELEGATE_STATUS_TOOL_NAME:
                 task_id = arguments.get("task_id")
                 return await delegate_status_tool(task_id)
@@ -94,7 +98,7 @@ def create_server() -> Server:
                 return await delegate_stop_tool(task_id)
 
             if requested_tool != DELEGATE_TOOL_NAME:
-                valid_tools = [DELEGATE_TOOL.name, DELEGATE_STATUS_TOOL.name, DELEGATE_STOP_TOOL.name, SCREENCAP_TOOL_NAME, LOCATE_ANYTHING_TOOL_NAME]
+                valid_tools = [DELEGATE_TOOL.name, DELEGATE_STATUS_TOOL.name, DELEGATE_STOP_TOOL.name, SCREENCAP_TOOL_NAME, LOCATE_ANYTHING_TOOL_NAME, SPEAK_TOOL_NAME]
                 if DEBUGGING:
                     valid_tools.append(COUNT_TOOL_NAME)
                 raise McpError(ErrorData(code=1, message=f"You made up a tool... you asked for {requested_tool}...", data={"valid_tools": valid_tools}))
