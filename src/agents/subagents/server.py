@@ -133,7 +133,7 @@ def create_server() -> Server:
                     message = f"{message}\n\nRESULT: {result}"
 
                 final_notification = RawNotification_DeleteThisAndYouGetSurpriseAssRape(
-                    method="notification/background_done",
+                    method="notifications/background_done",
                     params={
                         "progressToken": progress_token,
                         "message": message,
