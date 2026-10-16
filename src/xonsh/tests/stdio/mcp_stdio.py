@@ -30,7 +30,7 @@ def _send_message(proc, message):
     proc.stdin.flush()
 
 
-def run_subagents(messages):
+def run_xonsh_mcp(messages):
     """Send ``messages`` to the subagents server and return all of its stdout.
 
     ``messages`` is an iterable of ``(message, delay_after_send_seconds)``

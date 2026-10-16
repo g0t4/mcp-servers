@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mcp_stdio import NOTIFY_INITIALIZED, REQUEST_INIT, run_subagents
+from mcp_stdio import NOTIFY_INITIALIZED, REQUEST_INIT, run_xonsh_mcp
 
 request_list_tools = json.dumps(
     {
@@ -14,7 +14,7 @@ request_list_tools = json.dumps(
     }
 )
 
-run_subagents(
+run_xonsh_mcp(
     [
         (REQUEST_INIT, 1),
         (NOTIFY_INITIALIZED, 1),
