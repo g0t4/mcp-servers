@@ -165,7 +165,7 @@ async def execute_xonsh(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     background: bool = False,
-    on_background_done: Callable[[str | None, str | None], Awaitable[None]] | None = None,
+    on_background_done: Callable[[dict | None, str | None], Awaitable[None]] | None = None,
 ) -> CallToolResult:
     """Execute code in a fresh, non-interactive Xonsh process."""
     if not code.strip():
@@ -195,8 +195,10 @@ async def execute_xonsh(
                 bg.result = result.structuredContent or {}
             except asyncio.CancelledError:
                 bg.error = "cancelled"
+                raise
             except Exception as error:
                 bg.error = str(error)
+                console.print(f"BACKGROUND ERROR: {error}")
             finally:
                 bg.done = True
                 try:
@@ -263,7 +265,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         if background and ctx is not None:
             progress_token = ctx.request_context.meta.progressToken if ctx.request_context.meta else None
 
-            async def on_background_done(result: str | None, error: str | None) -> None:
+            async def on_background_done(result: dict | None, error: str | None) -> None:
                 if error is not None:
                     message = f"FAILED: Background run_xonsh failed with error: {error}"
                 else:

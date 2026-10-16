@@ -420,8 +420,9 @@ async def delegate_tool(
                 if on_background_done is not None:
                     try:
                         await on_background_done(bg.result, bg.error)
-                    except Exception:
-                        pass  # best effort, don't break background task on callback errors
+                    except Exception as e:
+                        console.print("on_background_done failed", e)
+                        # best effort, don't break background task on callback errors
                 _current_background_agent.reset(token)
 
         bg.task = asyncio.create_task(_run_background())
