@@ -5,12 +5,15 @@ import asyncio
 import os
 import signal
 import sys
-import time
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
-from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult
+from typing import Any
+
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import CallToolResult, Notification
+
 from mcp_server_xonsh.mcp_logging import LogContext
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -20,6 +23,10 @@ MAX_TIMEOUT_SECONDS = 600.0
 _log = LogContext("xonsh")
 console = _log.console
 _verbose = False
+
+# DO NOT FORGET THE FUCKING TYPE ANNOTATION OR YOU ARE ASS RAPED
+# pydantic happily deletes shit w/o a fucking care in the world (no logging, no errors, no nothing unless the person that built the model made it strict)
+RawNotification_DeleteThisAndYouGetSurpriseAssRape = Notification[dict[str, Any], str]
 
 
 @dataclass
@@ -158,6 +165,7 @@ async def execute_xonsh(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     background: bool = False,
+    on_background_done: Callable[[str | None, str | None], Awaitable[None]] | None = None,
 ) -> CallToolResult:
     """Execute code in a fresh, non-interactive Xonsh process."""
     if not code.strip():
@@ -191,6 +199,12 @@ async def execute_xonsh(
                 bg.error = str(error)
             finally:
                 bg.done = True
+                try:
+                    if on_background_done is not None:
+                        await on_background_done(bg.result, bg.error)
+                except Exception as e:
+                    console.print("on_background_done failed", e)
+                    # best effort, don't break background task on callback errors
 
         asyncio.create_task(_collect_result(bg.task))
         return CallToolResult(
@@ -243,7 +257,41 @@ def create_server(workdir: str | None = None) -> FastMCP:
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
         background: bool = False,
+        ctx: Context | None = None,
     ) -> CallToolResult:
+        on_background_done = None
+        if background and ctx is not None:
+            progress_token = ctx.request_context.meta.progressToken if ctx.request_context.meta else None
+
+            async def on_background_done(result: str | None, error: str | None) -> None:
+                if error is not None:
+                    message = f"FAILED: Background run_xonsh failed with error: {error}"
+                else:
+                    message = "DONE: Background run_xonsh completed"
+
+                final_notification = RawNotification_DeleteThisAndYouGetSurpriseAssRape(
+                    method="background/done",
+                    params={
+                        "progressToken": progress_token,
+                        "message": message,
+                        # "related_request_id": str(ctx.request_id), # FYI I don't need this b/c I already have it in progressToken in my case => only add back if needed for some specific client issue
+                        "result": result,
+                        "error": error,
+                    },
+                )
+
+                # * avoid vim.NIL (due to null/None values)
+                if final_notification.params["result"] is None:
+                    del final_notification.params["result"]
+                if final_notification.params.get("error") is None:
+                    del final_notification.params["error"]
+
+                if progress_token is None:
+                    # client side might struggle to correlate, but I bet agents will figure it out
+                    console.print("missing progress_token, responding w/ background/done anyways")
+
+                await ctx.request_context.session.send_notification(final_notification)
+
         return await execute_xonsh(
             code,
             cwd=cwd,
@@ -253,6 +301,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
             background=background,
+            on_background_done=on_background_done,
         )
 
     @server.tool(
