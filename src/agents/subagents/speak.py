@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import asyncio
 
 from mcp.types import TextContent, Tool
 
@@ -64,8 +65,14 @@ async def speak(text: str, lang: str = "en", background: bool = False) -> list[T
 
             threading.Thread(target=_speak_async, daemon=True).start()
         else:
-            client = TTSClient()
-            client.speak(text, lang=lang, speaker_file=SERVER_VOICE_REF)
+            # Run TTS in a thread so we don't block the event loop.
+            await asyncio.to_thread(_do_speak, text, lang)
         return [TextContent(type="text", text=f"Spoke: {text!r}")]
     except Exception as error:
         return [TextContent(type="text", text=f"ERROR: Failed to speak: {error}")]
+
+
+def _do_speak(text: str, lang: str = "en") -> None:
+    """Synchronous TTS speak helper."""
+    client = TTSClient()
+    client.speak(text, lang=lang, speaker_file=SERVER_VOICE_REF)
