@@ -146,6 +146,62 @@ async def test_background_task_completes_and_stores_result() -> None:
     assert bg.process.pid == s["pid"]
 
 
+async def test_xonsh_status_streams_and_drains_stdout_while_running() -> None:
+    """xonsh_status returns newly accumulated stdout and drains it between polls."""
+    from mcp_server_xonsh.server import _background_tasks
+    import asyncio
+
+    server = create_server()
+
+    # Background task that prints, then sleeps, then prints again.
+    result = await execute_xonsh(
+        "import time\nprint('first')\ntime.sleep(0.5)\nprint('second')",
+        background=True,
+    )
+    s = result.structuredContent
+    assert s is not None
+    task_id = s["task_id"]
+
+    bg = _background_tasks.get(task_id)
+    assert bg is not None
+
+    # Wait until 'first' has been streamed into the buffer.
+    for _ in range(20):
+        if "first" in bg.stdout_buffer:
+            break
+        await asyncio.sleep(0.05)
+
+    assert "first" in bg.stdout_buffer
+    assert "second" not in bg.stdout_buffer
+
+    # First poll via the xonsh_status tool: returns accumulated stdout, then drains.
+    status_result = await server.call_tool("xonsh_status", {"task_id": task_id})
+    status_content = status_result.structuredContent or {}
+    assert status_content.get("done") is False
+    assert "first" in status_content.get("stdout", "")
+    assert "second" not in status_content.get("stdout", "")
+
+    # Buffer is drained after the poll.
+    assert bg.stdout_buffer == ""
+
+    # Second poll before 'second' arrives: no stdout since drained.
+    status_result_2 = await server.call_tool("xonsh_status", {"task_id": task_id})
+    status_content_2 = status_result_2.structuredContent or {}
+    assert status_content_2.get("done") is False
+    assert "stdout" not in status_content_2 or status_content_2["stdout"] == ""
+
+    # Wait for the task to finish; the full result is stored in bg.result.
+    for _ in range(30):
+        if bg.done:
+            break
+        await asyncio.sleep(0.05)
+
+    assert bg.done is True
+    assert bg.result is not None
+    assert "first" in bg.result["stdout"]
+    assert "second" in bg.result["stdout"]
+
+
 def test_server_exposes_xonsh_status() -> None:
     server = create_server()
     tools = server._tool_manager.list_tools()

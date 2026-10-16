@@ -39,6 +39,10 @@ class BackgroundXonshTask:
     result: dict | None = None
     error: str | None = None
     task: asyncio.Task | None = None
+    # Streamed output buffers, drained by xonsh_status on each poll so callers
+    # only see NEW output since their last status check.
+    stdout_buffer: str = ""
+    stderr_buffer: str = ""
 
 
 _background_tasks: dict[str, BackgroundXonshTask] = {}
@@ -162,6 +166,105 @@ async def _communicate_xonsh_process(
     return CallToolResult(content=[], structuredContent=structured, isError=is_error)
 
 
+async def _stream_xonsh_process(
+    process: asyncio.subprocess.Process,
+    bg: BackgroundXonshTask,
+    *,
+    stdin: str | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+) -> CallToolResult:
+    """Run a spawned xonsh process, streaming output into the bg task's buffers.
+
+    While the process runs, stdout/stderr chunks are appended to
+    ``bg.stdout_buffer`` / ``bg.stderr_buffer`` so ``xonsh_status`` can drain and
+    return them on each poll. When the process settles, the FULL output is used
+    to build the final result (stored in ``bg.result``), regardless of how much
+    has already been drained from the live buffers.
+    """
+    timed_out = False
+
+    if stdin is not None and process.stdin is not None:
+        process.stdin.write(stdin.encode())
+        await process.stdin.drain()
+        process.stdin.close()
+
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+
+    async def _read_stream(
+        stream: asyncio.StreamReader | None,
+        chunks: list[bytes],
+        buffer_attr: str,
+    ) -> None:
+        if stream is None:
+            return
+        try:
+            while True:
+                chunk = await stream.read(8192)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                setattr(
+                    bg,
+                    buffer_attr,
+                    getattr(bg, buffer_attr) + chunk.decode("utf-8", errors="replace"),
+                )
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            # Best effort: don't let a reader failure kill the background task.
+            pass
+
+    stdout_task = asyncio.create_task(
+        _read_stream(process.stdout, stdout_chunks, "stdout_buffer")
+    )
+    stderr_task = asyncio.create_task(
+        _read_stream(process.stderr, stderr_chunks, "stderr_buffer")
+    )
+
+    try:
+        await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
+    except TimeoutError:
+        timed_out = True
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            await asyncio.wait_for(process.wait(), timeout=1.0)
+        except TimeoutError:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            await process.wait()
+
+    # Wait for stream readers to finish draining remaining output.
+    await asyncio.gather(stdout_task, stderr_task)
+
+    stdout = b"".join(stdout_chunks)
+    stderr = b"".join(stderr_chunks)
+
+    stdout_text, stdout_truncated, stdout_bytes = _truncate_and_decode(stdout, max_output_bytes)
+    stderr_text, stderr_truncated, stderr_bytes = _truncate_and_decode(stderr, max_output_bytes)
+    is_error = process.returncode != 0 or timed_out
+    structured = {
+        "exit_code": process.returncode,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+    }
+    if timed_out:
+        structured["timed_out"] = True
+    if stdout_truncated:
+        structured["stdout_truncated"] = True
+        structured["stdout_bytes"] = stdout_bytes
+    if stderr_truncated:
+        structured["stderr_truncated"] = True
+        structured["stderr_bytes"] = stderr_bytes
+    return CallToolResult(content=[], structuredContent=structured, isError=is_error)
+
+
 async def _run_xonsh_process(
     code: str,
     *,
@@ -222,8 +325,9 @@ async def execute_xonsh(
         )
         bg.process = process
         bg.task = asyncio.create_task(
-            _communicate_xonsh_process(
+            _stream_xonsh_process(
                 process,
+                bg,
                 stdin=stdin,
                 timeout_seconds=timeout_seconds,
                 max_output_bytes=max_output_bytes,
@@ -356,7 +460,10 @@ def create_server(workdir: str | None = None) -> FastMCP:
         name="xonsh_status",
         description=("Check the status of a background xonsh task started with "
                      "run_xonsh (background=True). Reports done (true/false) plus "
-                     "the task's result or error. Also includes the process pid."),
+                     "the task's result or error. While running, returns any "
+                     "newly accumulated stdout/stderr since the last poll (buffers "
+                     "are drained, so output is not repeated). Also includes the "
+                     "process pid."),
     )
     async def xonsh_status(task_id: str) -> CallToolResult:
         bg = _background_tasks.get(task_id)
@@ -367,13 +474,22 @@ def create_server(workdir: str | None = None) -> FastMCP:
                 isError=True,
             )
         if not bg.done:
+            structured: dict[str, Any] = {
+                "task_id": task_id,
+                "done": False,
+                "pid": bg.process.pid if bg.process else None,
+            }
+            # Surface any new output accumulated since the last poll, then
+            # DRAIN the buffers so subsequent polls only see NEW output.
+            if bg.stdout_buffer:
+                structured["stdout"] = bg.stdout_buffer
+                bg.stdout_buffer = ""
+            if bg.stderr_buffer:
+                structured["stderr"] = bg.stderr_buffer
+                bg.stderr_buffer = ""
             return CallToolResult(
                 content=[],
-                structuredContent={
-                    "task_id": task_id,
-                    "done": False,
-                    "pid": bg.process.pid if bg.process else None,
-                },
+                structuredContent=structured,
                 isError=False,
             )
         if bg.error:
