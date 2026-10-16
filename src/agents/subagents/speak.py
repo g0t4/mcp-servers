@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 from mcp.types import TextContent, Tool
 
@@ -24,7 +25,8 @@ SPEAK_TOOL = Tool(
         "Speak text out loud using text-to-speech (TTS). Uses the user's "
         "cloned voice. The audio is played on the local machine so the user "
         "can hear it. Use this to communicate audibly with the user. Keep the "
-        "text concise (1-3 sentences)."
+        "text concise (1-3 sentences). Use background=True for fire-and-forget "
+        "messages like 'one sec' so you're not blocked on the TTS call."
     ),
     inputSchema={
         "properties": {
@@ -37,6 +39,11 @@ SPEAK_TOOL = Tool(
                 "description": "Language code (e.g. 'en', 'zh', 'ja'). Default 'en'.",
                 "default": "en",
             },
+            "background": {
+                "type": "boolean",
+                "description": "If true, fire-and-forget the speech without blocking.",
+                "default": False,
+            },
         },
         "required": ["text"],
         "type": "object",
@@ -44,11 +51,21 @@ SPEAK_TOOL = Tool(
 )
 
 
-async def speak(text: str, lang: str = "en") -> list[TextContent]:
+async def speak(text: str, lang: str = "en", background: bool = False) -> list[TextContent]:
     """Speak text out loud using TTS."""
     try:
-        client = TTSClient()
-        client.speak(text, lang=lang, speaker_file=SERVER_VOICE_REF)
+        if background:
+            def _speak_async():
+                try:
+                    client = TTSClient()
+                    client.speak(text, lang=lang, speaker_file=SERVER_VOICE_REF)
+                except Exception as error:
+                    pass  # best effort
+
+            threading.Thread(target=_speak_async, daemon=True).start()
+        else:
+            client = TTSClient()
+            client.speak(text, lang=lang, speaker_file=SERVER_VOICE_REF)
         return [TextContent(type="text", text=f"Spoke: {text!r}")]
     except Exception as error:
         return [TextContent(type="text", text=f"ERROR: Failed to speak: {error}")]
