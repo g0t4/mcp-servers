@@ -182,7 +182,7 @@ async def delegate_tool(
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     on_tool_start: Callable[[str, dict, int], Awaitable[None]] | None = None,
     background: bool = False,
-    on_background_done: Callable[[str | None, str | None], Awaitable[None]] | None = None,
+    on_background_done: Callable[[str | None, str | None, int | None], Awaitable[None]] | None = None,
 ):
     """
     Delegate to a subagent to perform a task and summarize findings.
@@ -419,7 +419,7 @@ async def delegate_tool(
                 bg.done = True
                 if on_background_done is not None:
                     try:
-                        await on_background_done(bg.result, bg.error)
+                        await on_background_done(bg.result, bg.error, None)
                     except Exception as e:
                         console.print("on_background_done failed", e)
                         # best effort, don't break background task on callback errors

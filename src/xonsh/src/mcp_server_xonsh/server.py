@@ -88,19 +88,17 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     return env
 
 
-async def _run_xonsh_process(
+async def _spawn_xonsh_process(
     code: str,
     *,
     cwd: str | None = None,
     default_cwd: str | None = None,
     stdin: str | None = None,
     env: dict[str, str | None] | None = None,
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
-) -> CallToolResult:
-    """Execute code in a fresh, non-interactive Xonsh process (internal)."""
+) -> asyncio.subprocess.Process:
+    """Create a fresh, non-interactive Xonsh subprocess (not yet run)."""
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
-    process = await asyncio.create_subprocess_exec(
+    return await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
         "xonsh",
@@ -115,6 +113,15 @@ async def _run_xonsh_process(
         start_new_session=True,
     )
 
+
+async def _communicate_xonsh_process(
+    process: asyncio.subprocess.Process,
+    *,
+    stdin: str | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+) -> CallToolResult:
+    """Run a spawned xonsh process to completion and build the result."""
     timed_out = False
     try:
         stdout, stderr = await asyncio.wait_for(
@@ -155,6 +162,32 @@ async def _run_xonsh_process(
     return CallToolResult(content=[], structuredContent=structured, isError=is_error)
 
 
+async def _run_xonsh_process(
+    code: str,
+    *,
+    cwd: str | None = None,
+    default_cwd: str | None = None,
+    stdin: str | None = None,
+    env: dict[str, str | None] | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+) -> CallToolResult:
+    """Execute code in a fresh, non-interactive Xonsh process (internal)."""
+    process = await _spawn_xonsh_process(
+        code,
+        cwd=cwd,
+        default_cwd=default_cwd,
+        stdin=stdin,
+        env=env,
+    )
+    return await _communicate_xonsh_process(
+        process,
+        stdin=stdin,
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+    )
+
+
 async def execute_xonsh(
     code: str,
     *,
@@ -165,7 +198,7 @@ async def execute_xonsh(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     background: bool = False,
-    on_background_done: Callable[[dict | None, str | None], Awaitable[None]] | None = None,
+    on_background_done: Callable[[dict | None, str | None, int | None], Awaitable[None]] | None = None,
 ) -> CallToolResult:
     """Execute code in a fresh, non-interactive Xonsh process."""
     if not code.strip():
@@ -177,13 +210,21 @@ async def execute_xonsh(
         task_id = uuid.uuid4().hex
         bg = BackgroundXonshTask(task_id=task_id, code=code)
         _background_tasks[task_id] = bg
+        # Spawn eagerly so we can report the PID in the immediate response. The
+        # agent can then act on the process directly (kill, inspect, etc.)
+        # without needing a dedicated stop/status tool.
+        process = await _spawn_xonsh_process(
+            code,
+            cwd=cwd,
+            default_cwd=default_cwd,
+            stdin=stdin,
+            env=env,
+        )
+        bg.process = process
         bg.task = asyncio.create_task(
-            _run_xonsh_process(
-                code,
-                cwd=cwd,
-                default_cwd=default_cwd,
+            _communicate_xonsh_process(
+                process,
                 stdin=stdin,
-                env=env,
                 timeout_seconds=timeout_seconds,
                 max_output_bytes=max_output_bytes,
             )
@@ -203,7 +244,7 @@ async def execute_xonsh(
                 bg.done = True
                 try:
                     if on_background_done is not None:
-                        await on_background_done(bg.result, bg.error)
+                        await on_background_done(bg.result, bg.error, process.pid if bg.process else None)
                 except Exception as e:
                     console.print("on_background_done failed", e)
                     # best effort, don't break background task on callback errors
@@ -214,6 +255,7 @@ async def execute_xonsh(
             structuredContent={
                 "task_id": task_id,
                 "background": True,
+                "pid": process.pid,
             },
             isError=False,
         )
@@ -249,7 +291,8 @@ def create_server(workdir: str | None = None) -> FastMCP:
                      "status, timing, timeout, and truncation metadata. This tool can modify the "
                      "filesystem and invoke arbitrary programs with the server's permissions. "
                      "Use background=True for long-running tasks: returns immediately with a "
-                     "task_id, use xonsh_status to poll, and background/done notification when finished."),
+                     "task_id and the process's pid (so you can act on the process directly, e.g. "
+                     "kill it). Use xonsh_status to poll, and background/done notification when finished."),
     )
     async def run_xonsh(
         code: str,
@@ -265,7 +308,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         if background and ctx is not None:
             progress_token = ctx.request_context.meta.progressToken if ctx.request_context.meta else None
 
-            async def on_background_done(result: dict | None, error: str | None) -> None:
+            async def on_background_done(result: dict | None, error: str | None, pid: int | None = None) -> None:
                 if error is not None:
                     message = f"FAILED: Background run_xonsh failed with error: {error}"
                 else:
@@ -279,6 +322,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
                         # "related_request_id": str(ctx.request_id), # FYI I don't need this b/c I already have it in progressToken in my case => only add back if needed for some specific client issue
                         "result": result,
                         "error": error,
+                        "pid": pid,
                     },
                 )
 
@@ -287,6 +331,8 @@ def create_server(workdir: str | None = None) -> FastMCP:
                     del final_notification.params["result"]
                 if final_notification.params.get("error") is None:
                     del final_notification.params["error"]
+                if final_notification.params.get("pid") is None:
+                    del final_notification.params["pid"]
 
                 if progress_token is None:
                     # client side might struggle to correlate, but I bet agents will figure it out
@@ -310,7 +356,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         name="xonsh_status",
         description=("Check the status of a background xonsh task started with "
                      "run_xonsh (background=True). Reports done (true/false) plus "
-                     "the task's result or error."),
+                     "the task's result or error. Also includes the process pid."),
     )
     async def xonsh_status(task_id: str) -> CallToolResult:
         bg = _background_tasks.get(task_id)
@@ -323,7 +369,11 @@ def create_server(workdir: str | None = None) -> FastMCP:
         if not bg.done:
             return CallToolResult(
                 content=[],
-                structuredContent={"task_id": task_id, "done": False},
+                structuredContent={
+                    "task_id": task_id,
+                    "done": False,
+                    "pid": bg.process.pid if bg.process else None,
+                },
                 isError=False,
             )
         if bg.error:
@@ -333,6 +383,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
                     "task_id": task_id,
                     "done": True,
                     "error": bg.error,
+                    "pid": bg.process.pid if bg.process else None,
                 },
                 isError=True,
             )
@@ -342,6 +393,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
                 "task_id": task_id,
                 "done": True,
                 "result": bg.result or {},
+                "pid": bg.process.pid if bg.process else None,
             },
             isError=False,
         )

@@ -116,6 +116,8 @@ async def test_background_execution_returns_task_id_immediately() -> None:
     assert s is not None
     assert s["background"] is True
     assert "task_id" in s
+    assert isinstance(s["pid"], int)
+    assert s["pid"] > 0
 
 
 async def test_background_task_completes_and_stores_result() -> None:
@@ -140,6 +142,8 @@ async def test_background_task_completes_and_stores_result() -> None:
     assert bg.result is not None
     assert bg.result["exit_code"] == 0
     assert "background done" in bg.result["stdout"]
+    assert bg.process is not None
+    assert bg.process.pid == s["pid"]
 
 
 def test_server_exposes_xonsh_status() -> None:

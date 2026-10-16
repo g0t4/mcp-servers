@@ -133,7 +133,7 @@ def create_server() -> Server:
             # notification when a background subagent finishes. We capture the
             # session, progress_token, and request_id so the notification can be
             # sent after the tool call has already returned.
-            async def on_background_done(result: str | None, error: str | None) -> None:
+            async def on_background_done(result: str | None, error: str | None, pid: int | None = None) -> None:
                 if error is not None:
                     message = f"FAILED: Background subagent failed with error: {error}"
                 else:
