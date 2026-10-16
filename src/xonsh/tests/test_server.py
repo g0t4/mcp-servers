@@ -106,3 +106,44 @@ def test_server_exposes_run_xonsh() -> None:
     schema = tool.parameters
     assert schema["required"] == ["code"]
     assert json.dumps(schema)
+
+
+async def test_background_execution_returns_task_id_immediately() -> None:
+    result = await execute_xonsh("print('background test')", background=True)
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["background"] is True
+    assert "task_id" in s
+
+
+async def test_background_task_completes_and_stores_result() -> None:
+    result = await execute_xonsh("print('background done')", background=True)
+    s = result.structuredContent
+    assert s is not None
+    task_id = s["task_id"]
+
+    # Poll until done
+    from mcp_server_xonsh.server import _background_tasks
+    import asyncio
+
+    for _ in range(20):
+        bg = _background_tasks.get(task_id)
+        if bg and bg.done:
+            break
+        await asyncio.sleep(0.1)
+
+    assert bg is not None
+    assert bg.done is True
+    assert bg.error is None
+    assert bg.result is not None
+    assert bg.result["exit_code"] == 0
+    assert "background done" in bg.result["stdout"]
+
+
+def test_server_exposes_xonsh_status() -> None:
+    server = create_server()
+    tools = server._tool_manager.list_tools()
+    tool_names = [tool.name for tool in tools]
+    assert "xonsh_status" in tool_names

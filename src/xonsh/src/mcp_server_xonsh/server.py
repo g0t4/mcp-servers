@@ -6,6 +6,8 @@ import os
 import signal
 import sys
 import time
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult
@@ -18,6 +20,22 @@ MAX_TIMEOUT_SECONDS = 600.0
 _log = LogContext("xonsh")
 console = _log.console
 _verbose = False
+
+
+@dataclass
+class BackgroundXonshTask:
+    """Holds state for a background xonsh task."""
+    task_id: str
+    code: str
+    process: asyncio.subprocess.Process | None = None
+    done: bool = False
+    result: dict | None = None
+    error: str | None = None
+    task: asyncio.Task | None = None
+
+
+_background_tasks: dict[str, BackgroundXonshTask] = {}
+_server_instance: FastMCP | None = None
 
 
 def _truncate_and_decode(data: bytes, limit: int) -> tuple[str, bool, int]:
@@ -63,7 +81,7 @@ def _build_env(changes: dict[str, str | None] | None) -> dict[str, str]:
     return env
 
 
-async def execute_xonsh(
+async def _run_xonsh_process(
     code: str,
     *,
     cwd: str | None = None,
@@ -73,19 +91,8 @@ async def execute_xonsh(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
 ) -> CallToolResult:
-    """Execute code in a fresh, non-interactive Xonsh process."""
-    if not code.strip():
-        raise ValueError("code must not be empty")
-    if not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS:
-        raise ValueError(f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}")
-
+    """Execute code in a fresh, non-interactive Xonsh process (internal)."""
     resolved_cwd = _resolve_cwd(cwd, default_cwd)
-    code_preview = code if len(code) <= 200 else code[:200] + "..."
-    if _verbose:
-        console.print(f"[bold green]run_xonsh[/] [cyan]{resolved_cwd}[/] "
-                      f"[dim]timeout={timeout_seconds}s max_out={max_output_bytes}[/]")
-        console.print(f"  [dim]{code_preview}[/]")
-    started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
@@ -124,15 +131,6 @@ async def execute_xonsh(
 
     stdout_text, stdout_truncated, stdout_bytes = _truncate_and_decode(stdout, max_output_bytes)
     stderr_text, stderr_truncated, stderr_bytes = _truncate_and_decode(stderr, max_output_bytes)
-    duration_ms = round((time.monotonic() - started) * 1000)
-    if _verbose:
-        console.print(f"  [dim]exit[/] [cyan]{process.returncode}[/] "
-                      f"[dim]duration_ms={duration_ms}[/] "
-                      f"[dim]timed_out={timed_out}[/] "
-                      f"[dim]stdout_truncated={stdout_truncated}[/] "
-                      f"[dim]stderr_truncated={stderr_truncated}[/] "
-                      f"[dim]stdout_bytes={stdout_bytes}[/] "
-                      f"[dim]stderr_bytes={stderr_bytes}[/]")
     is_error = process.returncode != 0 or timed_out
     structured = {
         "exit_code": process.returncode,
@@ -148,6 +146,71 @@ async def execute_xonsh(
         structured["stderr_truncated"] = True
         structured["stderr_bytes"] = stderr_bytes
     return CallToolResult(content=[], structuredContent=structured, isError=is_error)
+
+
+async def execute_xonsh(
+    code: str,
+    *,
+    cwd: str | None = None,
+    default_cwd: str | None = None,
+    stdin: str | None = None,
+    env: dict[str, str | None] | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    background: bool = False,
+) -> CallToolResult:
+    """Execute code in a fresh, non-interactive Xonsh process."""
+    if not code.strip():
+        raise ValueError("code must not be empty")
+    if not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS:
+        raise ValueError(f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS}")
+
+    if background:
+        task_id = uuid.uuid4().hex
+        bg = BackgroundXonshTask(task_id=task_id, code=code)
+        _background_tasks[task_id] = bg
+        bg.task = asyncio.create_task(
+            _run_xonsh_process(
+                code,
+                cwd=cwd,
+                default_cwd=default_cwd,
+                stdin=stdin,
+                env=env,
+                timeout_seconds=timeout_seconds,
+                max_output_bytes=max_output_bytes,
+            )
+        )
+
+        async def _collect_result(task: asyncio.Task) -> None:
+            try:
+                result = await task
+                bg.result = result.structuredContent or {}
+            except asyncio.CancelledError:
+                bg.error = "cancelled"
+            except Exception as error:
+                bg.error = str(error)
+            finally:
+                bg.done = True
+
+        asyncio.create_task(_collect_result(bg.task))
+        return CallToolResult(
+            content=[],
+            structuredContent={
+                "task_id": task_id,
+                "background": True,
+            },
+            isError=False,
+        )
+
+    return await _run_xonsh_process(
+        code,
+        cwd=cwd,
+        default_cwd=default_cwd,
+        stdin=stdin,
+        env=env,
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+    )
 
 
 def create_server(workdir: str | None = None) -> FastMCP:
@@ -168,7 +231,9 @@ def create_server(workdir: str | None = None) -> FastMCP:
         description=("Run Xonsh source in a fresh process. Xonsh accepts shell-like commands and "
                      "ordinary Python in the same program. Returns structured stdout, stderr, exit "
                      "status, timing, timeout, and truncation metadata. This tool can modify the "
-                     "filesystem and invoke arbitrary programs with the server's permissions."),
+                     "filesystem and invoke arbitrary programs with the server's permissions. "
+                     "Use background=True for long-running tasks: returns immediately with a "
+                     "task_id, use xonsh_status to poll, and background/done notification when finished."),
     )
     async def run_xonsh(
         code: str,
@@ -177,6 +242,7 @@ def create_server(workdir: str | None = None) -> FastMCP:
         env: dict[str, str | None] | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+        background: bool = False,
     ) -> CallToolResult:
         return await execute_xonsh(
             code,
@@ -186,7 +252,51 @@ def create_server(workdir: str | None = None) -> FastMCP:
             env=env,
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
+            background=background,
         )
+
+    @server.tool(
+        name="xonsh_status",
+        description=("Check the status of a background xonsh task started with "
+                     "run_xonsh (background=True). Reports done (true/false) plus "
+                     "the task's result or error."),
+    )
+    async def xonsh_status(task_id: str) -> CallToolResult:
+        bg = _background_tasks.get(task_id)
+        if bg is None:
+            return CallToolResult(
+                content=[],
+                structuredContent={"error": f"Unknown task_id: {task_id}"},
+                isError=True,
+            )
+        if not bg.done:
+            return CallToolResult(
+                content=[],
+                structuredContent={"task_id": task_id, "done": False},
+                isError=False,
+            )
+        if bg.error:
+            return CallToolResult(
+                content=[],
+                structuredContent={
+                    "task_id": task_id,
+                    "done": True,
+                    "error": bg.error,
+                },
+                isError=True,
+            )
+        return CallToolResult(
+            content=[],
+            structuredContent={
+                "task_id": task_id,
+                "done": True,
+                "result": bg.result or {},
+            },
+            isError=False,
+        )
+
+    global _server_instance
+    _server_instance = server
 
     return server
 
