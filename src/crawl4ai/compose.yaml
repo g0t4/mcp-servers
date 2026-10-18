@@ -1,0 +1,12 @@
+services:
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: crawl4ai
+    ports:
+      - "127.0.0.1:11235:11235"
+    shm_size: 1g
+    environment:
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_API_TOKEN:?Set CRAWL4AI_API_TOKEN in .env}
+      CRAWL4AI_NO_CLOUD_NOTICE: "1"
+    restart: unless-stopped
+
