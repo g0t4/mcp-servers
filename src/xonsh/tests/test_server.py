@@ -98,6 +98,83 @@ async def test_validates_arguments() -> None:
         await execute_xonsh("pwd", timeout_seconds=0)
 
 
+
+# These assert Python semantics that bash can't do, plus xonsh's Python+shell
+# interop. They mirror the run_bash "bash-isms" tests on the other tool.
+async def test_xonsh_python_expressions() -> None:
+    result = await execute_xonsh("print(sum([1, 2, 3, 4]))")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "10\n"
+    assert s["stderr"] == ""
+
+
+async def test_xonsh_fstrings_and_variables() -> None:
+    result = await execute_xonsh("name = 'world'\nprint(f'hello {name}')")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "hello world\n"
+
+
+async def test_xonsh_python_comprehensions() -> None:
+    result = await execute_xonsh("print([x * x for x in range(5)])")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "[0, 1, 4, 9, 16]\n"
+
+
+async def test_xonsh_python_multiline_logic() -> None:
+    result = await execute_xonsh(
+        "for i in range(3):\n    print(f'n={i}')",
+    )
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "n=0\nn=1\nn=2\n"
+
+
+async def test_xonsh_subprocess_capture() -> None:
+    result = await execute_xonsh("print($(echo captured).strip())")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "captured\n"
+
+
+async def test_xonsh_subprocess_pipes() -> None:
+    result = await execute_xonsh("echo hello | tr a-z A-Z")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "HELLO\n"
+
+
+async def test_xonsh_python_and_shell_interop() -> None:
+    # The killer feature: mix Python and shell in one program.
+    result = await execute_xonsh("print(int($(echo 5)) * 2)")
+
+    assert result.isError is False
+    s = result.structuredContent
+    assert s is not None
+    assert s["exit_code"] == 0
+    assert s["stdout"] == "10\n"
+
+
 def test_server_exposes_run_xonsh() -> None:
     server = create_server()
     tools = server._tool_manager.list_tools()
