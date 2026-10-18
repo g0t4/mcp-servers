@@ -140,15 +140,18 @@ async def setup_agent():
                 "mcp-server-fetch",
             ],
         },
-        "run_process": {
+        "commands": {
             "transport": "stdio",
-            "command": "npx",
+            "command": "uv",
             "args": [
-                os.environ["HOME"] + "/repos/github/g0t4/mcp-server-commands/build/index.js",
-                # -- FYI leave --verbose on for now given I am using a log file so it s/b NBD
-                # --    this will be a huge help in troubleshooting hung tool calls and other issues
-                "--verbose",
-            ]
+                "run",
+                "--directory",
+                os.environ["HOME"] + "/repos/github/g0t4/mcp-server-commands/src/mcp_server_commands",
+                "mcp-server-commands",
+                "--workdir",
+                os.getcwd(),
+                # "--verbose", # optional to dump extra logging details
+            ],
         },
         # Perception tools (screencap + locate_anything) so a vision-capable
         # subagent model can actually SEE the screen, not just get a file path.
