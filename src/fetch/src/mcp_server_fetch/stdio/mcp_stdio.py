@@ -11,7 +11,7 @@ import threading
 import time
 from pathlib import Path
 
-MCP_XONSH_DIR = Path.home() / "repos/github/g0t4/mcp-servers/src/xonsh"
+MCP_SERVER_DIR = Path.home() / "repos/github/g0t4/mcp-servers/src/fetch"
 
 # The MCP stdio server uses newline-delimited JSON-RPC, so each request and
 # response occupies exactly one line.
@@ -30,7 +30,7 @@ def _send_message(proc, message):
     proc.stdin.flush()
 
 
-def run_xonsh_mcp(messages):
+def test_messages(messages):
     """Send ``messages`` to the subagents server and return all of its stdout.
 
     ``messages`` is an iterable of ``(message, delay_after_send_seconds)``
@@ -43,7 +43,7 @@ def run_xonsh_mcp(messages):
     Server stderr is left inherited so it surfaces on the terminal, exactly as
     it did in the fish tests (stdout is reserved for the JSON-RPC transport).
     """
-    cmd = ["uv", "run", "--directory", str(MCP_XONSH_DIR), "-m", "mcp_server_xonsh"]
+    cmd = ["uv", "run", "--directory", str(MCP_SERVER_DIR), "-m", "mcp_server_fetch"]
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE,
