@@ -108,6 +108,29 @@ def test_server_exposes_run_xonsh() -> None:
     assert json.dumps(schema)
 
 
+def _schema_contains_title_key(node: object) -> bool:
+    """Whether a JSON schema node (or any descendant) has a ``title`` key."""
+    if isinstance(node, dict):
+        if "title" in node:
+            return True
+        return any(_schema_contains_title_key(child) for child in node.values())
+    if isinstance(node, list):
+        return any(_schema_contains_title_key(child) for child in node)
+    return False
+
+
+async def test_tool_schemas_omit_redundant_titles() -> None:
+    """Pydantic's auto-generated ``title`` keys should not reach the contract."""
+    server = create_server()
+    tools = await server.list_tools()
+
+    assert tools
+    for tool in tools:
+        assert not _schema_contains_title_key(tool.inputSchema), (
+            f"tool {tool.name} leaked a redundant 'title' into its input schema"
+        )
+
+
 async def test_background_execution_returns_task_id_immediately() -> None:
     result = await execute_xonsh("print('background test')", background=True)
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import CallToolResult, Notification
+from mcp.types import CallToolResult, Notification, Tool as MCPTool
 
 from mcp_server_xonsh.mcp_logging import LogContext
 
@@ -375,13 +375,46 @@ async def execute_xonsh(
     )
 
 
+def _strip_titles(node: Any) -> Any:
+    """Recursively drop Pydantic's auto-generated ``title`` keys from a schema.
+
+    Pydantic adds a ``title`` to every schema node that merely restates the
+    field name, e.g. "Cwd" for ``cwd``. It carries no meaning for the client, so
+    we remove it to keep the tool contract terse.
+    """
+    if isinstance(node, dict):
+        node.pop("title", None)
+        for child in node.values():
+            _strip_titles(child)
+    elif isinstance(node, list):
+        for child in node:
+            _strip_titles(child)
+    return node
+
+
+class NoRedundantTitlesFastMCP(FastMCP):
+    """FastMCP that omits Pydantic's auto-generated ``title`` keys from tool schemas.
+
+    Pydantic emits a ``title`` for every field (and for the schema itself) that
+    just echoes the field name, e.g. "Cwd" for ``cwd``. That's noise in the MCP
+    contract with no extra information, so we strip it from the input schema
+    before it reaches clients.
+    """
+
+    async def list_tools(self) -> list[MCPTool]:
+        tools = await super().list_tools()
+        for tool in tools:
+            tool.inputSchema = _strip_titles(tool.inputSchema)
+        return tools
+
+
 def create_server(workdir: str | None = None) -> FastMCP:
     # Pre-install a file-backed handler on the root logger so FastMCP's
     # ``configure_logging`` (which uses basicConfig and is a no-op once handlers
     # exist) keeps its framework logs on the log file instead of stderr.
     _log.configure_python_logging()
 
-    server = FastMCP(
+    server = NoRedundantTitlesFastMCP(
         "xonsh",
         instructions=("Execute commands and Python through Xonsh. Prefer concise native command "
                       "syntax for simple subprocesses and ordinary Python for data processing, "
