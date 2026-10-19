@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mcp_stdio import NOTIFY_INITIALIZED, REQUEST_INIT, run_subagents
 
 # Ask the subagent to take a screencap and tell us what it sees. The subagent
-# has `run_process` (and fetch), so it can run `screencapture`.
+# has `run_bash` (and fetch), so it can run `screencapture`.
 request_call_delegate = json.dumps(
     {
         "jsonrpc": "2.0",
@@ -18,7 +18,7 @@ request_call_delegate = json.dumps(
             "arguments": {
                 "description": (
                     "Take a screenshot of the current screen and tell me what you see. "
-                    "Use run_process to run: screencapture -x -m /tmp/subagent_screencap.png "
+                    "Use run_bash to run: screencapture -x -m /tmp/subagent_screencap.png "
                     "Then describe the content of the screenshot (what is on screen). "
                     "Report the path and your description."
                 )
